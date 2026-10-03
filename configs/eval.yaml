@@ -1,0 +1,9 @@
+# Параметры оценки прогноза
+panel: data/interim/panel.parquet
+category: Все категории
+min_train_months: 12        # минимальная длина обучения
+horizons: [1, 3, 6, 12]     # горизонты прогноза, мес.
+only_full_history: true     # оцениваем МО с полными 24 мес.
+out_dir: data/interim/forecasts
+seed: 42
+models: [naive, seasonal_naive, seasonal_naive_growth, prophet, prophet_yearly]
