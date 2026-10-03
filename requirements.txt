@@ -6,3 +6,5 @@ lightgbm
 scikit-learn
 prophet
 joblib
+requests
+lxml
