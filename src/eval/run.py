@@ -11,7 +11,9 @@ from src.eval.metrics import summarize
 from src.forecast.baselines import REGISTRY
 from src.forecast.prophet_model import Prophet_
 
-REGISTRY = {**REGISTRY, "prophet": lambda: Prophet_(False), "prophet_yearly": lambda: Prophet_(True)}
+from src.forecast.lgbm_model import GlobalLGBM, GlobalLGBMDeseason, GlobalLGBMX
+
+REGISTRY = {**REGISTRY, "lgbm_catmo": lambda: GlobalLGBMX(cat_mo=True, name="lgbm_catmo"), "lgbm_natcat": lambda: GlobalLGBMX(nat_cat=True, name="lgbm_natcat"), "lgbm_all": lambda: GlobalLGBMX(cat_mo=True, nat_cat=True, name="lgbm_all"), "lgbm_ds": lambda: GlobalLGBMDeseason(), "lgbm": lambda: GlobalLGBM(), "lgbm_no_nat": lambda: GlobalLGBM(use_national_seasonality=False, name="lgbm_no_nat"), "prophet": lambda: Prophet_(False), "prophet_yearly": lambda: Prophet_(True)}
 
 
 def main():

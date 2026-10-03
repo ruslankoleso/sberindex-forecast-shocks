@@ -1,0 +1,18 @@
+# Параметры глобального LightGBM
+national_file: data/raw/consumer-spending.parquet
+national_type: Всего
+seasonal_until: "2022-12-01"   # сезонный профиль считаем только по данным до этой даты (без утечки)
+max_h: 12
+lgbm:
+  objective: l1
+  n_estimators: 300
+  learning_rate: 0.05
+  num_leaves: 15
+  min_child_samples: 100
+  feature_fraction: 0.8
+  bagging_fraction: 0.8
+  bagging_freq: 1
+  reg_lambda: 5.0
+  n_jobs: 8
+  verbose: -1
+  random_state: 42
