@@ -8,3 +8,4 @@ prophet
 joblib
 requests
 lxml
+pypdf

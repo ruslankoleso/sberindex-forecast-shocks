@@ -1,3 +1,6 @@
-raw_dir: data/raw
+# Главный файл данных — набор организаторов (consumption.parquet)
+organizers_dir: data/raw/organizers
+consumption_file: consumption.parquet
+connection_file: connection.parquet
+market_access_file: market_access.parquet
 interim_dir: data/interim
-mo_file: potrebitelskie-beznalicnye-rashody-na-urovne-munizipalnyh-obrazovanij.parquet

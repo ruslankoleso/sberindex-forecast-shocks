@@ -6,7 +6,7 @@ import pandas as pd
 def load_wide(cfg):
     p = pd.read_parquet(cfg["panel"])
     p = p[p["category"] == cfg["category"]]
-    Y = p.pivot(index="period", columns="mo_id", values="value").sort_index()
+    Y = p.pivot(index="period", columns="territory_id", values="value").sort_index()
     if cfg.get("only_full_history", True):
         Y = Y.loc[:, Y.notna().all()]
     return Y
@@ -33,5 +33,5 @@ def run_cv(Y: pd.DataFrame, model, cfg) -> pd.DataFrame:
             prev = vals[t - 12] if t - 12 >= 0 else np.full(vals.shape[1], np.nan)
             out.append(pd.DataFrame(dict(
                 model=model.name, origin=Y.index[o], target=Y.index[t], h=h,
-                mo_id=Y.columns, y_true=vals[t], y_pred=pred[h - 1], y_prev_year=prev)))
+                territory_id=Y.columns, y_true=vals[t], y_pred=pred[h - 1], y_prev_year=prev)))
     return pd.concat(out, ignore_index=True)

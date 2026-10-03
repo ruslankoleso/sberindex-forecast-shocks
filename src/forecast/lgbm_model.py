@@ -196,7 +196,7 @@ class GlobalLGBMX(GlobalLGBM):
         if cat_mo:
             p = pd.read_parquet(self.cfg.get("panel", "data/interim/panel.parquet"))
             p = p[p["category"] != "Все категории"]
-            self.cat_wide = {c: g.pivot(index="period", columns="mo_id", values="value")
+            self.cat_wide = {c: g.pivot(index="period", columns="territory_id", values="value")
                              for c, g in p.groupby("category")}
         if nat_cat:
             n = pd.read_parquet(self.cfg["national_file"])
