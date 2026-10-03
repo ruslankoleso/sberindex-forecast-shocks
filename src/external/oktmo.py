@@ -42,6 +42,8 @@ def _kind(s: str) -> str:
 
 _norm = _core
 
+FEDERAL_CITIES = {"45", "40", "67"}   # коды ОКТМО: Москва, Санкт-Петербург, Севастополь
+
 
 def load_oktmo():
     d = json.loads(RAW.read_text(encoding="utf-8"))
@@ -67,6 +69,8 @@ def match(mo_dir: pd.DataFrame):
     for r in mo_dir.itertuples():
         k, kd = _core(r.mo_name), _kind(r.mo_name)
         c = ok[ok.key == k]
+        if "внутригородская территория города федерального значения" in r.mo_name.lower():
+            c = c[c.reg_code.isin(FEDERAL_CITIES)]      # такие названия бывают только у Москвы, СПб, Севастополя
         if len(c) > 1 and kd != "?":
             c2 = c[(c.kind == kd) | (c.kind == "?")]   # ОКТМО часто не пишет тип
             c = c2 if len(c2) else c
