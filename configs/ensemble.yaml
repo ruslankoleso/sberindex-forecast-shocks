@@ -1,0 +1,15 @@
+# Честный ансамбль: веса подбираются только по прошлым точкам прогноза
+forecasts_dir: data/interim/forecasts
+candidates:
+  - snaive_natg
+  - snaive_shrink_w25_k1
+  - snaive_shrink_w50_k1
+  - snaive_shrink_w75_k1
+  - lgbm_resid
+  - lgbm_catmo
+  - lgbm_no_nat
+  - chronos2_bc
+  - prophet
+min_past_origins: 2     # минимум прошлых точек, чтобы подбирать веса; иначе — запасная модель
+fallback: snaive_natg   # что использовать, если прошлого для подбора нет (в т. ч. h=12)
+methods: [best_past, inv_mae, nnls]

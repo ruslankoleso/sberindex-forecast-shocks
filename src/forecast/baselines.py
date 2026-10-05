@@ -56,3 +56,36 @@ class SeasonalNaiveNationalGrowth:
 
 
 REGISTRY["snaive_natg"] = SeasonalNaiveNationalGrowth
+
+
+class SeasonalNaiveShrunkGrowth(SeasonalNaiveNationalGrowth):
+    """Тот же месяц год назад × рост, смешанный из роста страны и собственного роста МО.
+
+    Собственный относительный рост МО: rel = среднее за последние k мес. (log рост МО г/г
+    − log рост страны г/г). Итоговый лог-рост = рост страны + w * rel, где w ∈ [0, 1] —
+    «доверие» к собственной истории МО (w=0 — как основа, w=1 — полностью свой рост).
+    Пока у МО < 12+k мес. истории, rel не считается и прогноз равен основе.
+    """
+
+    def __init__(self, w=0.5, k=3):
+        super().__init__()
+        self.w, self.k = w, k
+        self.name = f"snaive_shrink_w{int(w * 100)}_k{k}"
+
+    def predict(self, train, steps):
+        import pandas as pd
+        base = super().predict(train, steps)
+        v = np.log(train.values)
+        T = len(v)
+        if T < 12 + self.k:
+            return base
+        idx = train.index
+        rel = np.mean([v[t] - v[t - 12] - (self.L[idx[t]] - self.L[idx[t] - pd.DateOffset(years=1)])
+                       for t in range(T - self.k, T)], axis=0)
+        return base * np.exp(self.w * rel)
+
+
+for _w in (0.25, 0.5, 0.75, 1.0):
+    for _k in (1, 3):
+        _m = (lambda w, k: (lambda: SeasonalNaiveShrunkGrowth(w=w, k=k)))(_w, _k)
+        REGISTRY[f"snaive_shrink_w{int(_w * 100)}_k{_k}"] = _m
