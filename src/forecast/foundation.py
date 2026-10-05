@@ -36,6 +36,8 @@ class ChronosBolt:
         for i in range(0, len(ctx), bs):
             q, _ = self.pipe.predict_quantiles(ctx[i:i + bs], prediction_length=steps,
                                                quantile_levels=qs)
+            if isinstance(q, list):                     # Chronos-2 возвращает список (1, steps, Q)
+                q = torch.cat([x[:1] for x in q])
             out_q.append(q.numpy())                     # (b, steps, len(qs))
         q = np.concatenate(out_q)                       # (N, steps, Q)
         self.last_quantiles = q
@@ -69,3 +71,19 @@ class ChronosBoltBackcast(ChronosBolt):
         import pandas as pd
         idx = hist.index.append(train.index)
         return super().predict(pd.DataFrame(ext, index=idx, columns=train.columns), steps)
+
+
+class Chronos2(ChronosBolt):
+    """Chronos-2 (≈120 млн параметров) — более новая модель семейства, zero-shot."""
+    name = "chronos2"
+
+    def __init__(self, **kw):
+        super().__init__(key="chronos2", **kw)
+
+
+class Chronos2Backcast(ChronosBoltBackcast):
+    """Chronos-2 с контекстом, удлинённым национальным рядом (см. ChronosBoltBackcast)."""
+    name = "chronos2_bc"
+
+    def __init__(self, **kw):
+        super().__init__(key="chronos2", **kw)

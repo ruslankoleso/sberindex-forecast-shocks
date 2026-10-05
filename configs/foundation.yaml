@@ -7,4 +7,5 @@ chronos_bolt:
 chronos2:
   model_id: amazon/chronos-2
   device: cpu
-  batch_size: 128
+  batch_size: 256
+  quantiles: [0.1, 0.5, 0.9]

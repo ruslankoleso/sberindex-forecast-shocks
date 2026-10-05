@@ -32,3 +32,27 @@ class SeasonalNaiveGrowth:
 
 
 REGISTRY = {c.name: c for c in (Naive, SeasonalNaive, SeasonalNaiveGrowth)}
+
+
+class SeasonalNaiveNationalGrowth:
+    """Тот же месяц год назад × рост г/г национального ряда «Всего» на дату origin.
+
+    Годовой рост у территории оценить нельзя, пока история < 13 мес., а национальный
+    ряд (2018–2026) его даёт. Используется только национальное значение не позже origin.
+    """
+    name = "snaive_natg"
+
+    def __init__(self):
+        from pathlib import Path
+        import yaml
+        from src.forecast.lgbm_model import load_national
+        self.L = load_national(yaml.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8")))
+
+    def predict(self, train, steps):
+        import pandas as pd
+        t0 = train.index[-1]
+        g = np.exp(self.L[t0] - self.L[t0 - pd.DateOffset(years=1)])
+        return SeasonalNaive().predict(train, steps) * g
+
+
+REGISTRY["snaive_natg"] = SeasonalNaiveNationalGrowth

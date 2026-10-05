@@ -28,7 +28,12 @@ def _chronos_bolt_bc():
     return ChronosBoltBackcast()
 
 
-REGISTRY = {**REGISTRY, "chronos_bolt": _chronos_bolt, "chronos_bolt_bc": _chronos_bolt_bc, "lgbm_catmo": lambda: GlobalLGBMX(cat_mo=True, name="lgbm_catmo"), "lgbm_natcat": lambda: GlobalLGBMX(nat_cat=True, name="lgbm_natcat"), "lgbm_all": lambda: GlobalLGBMX(cat_mo=True, nat_cat=True, name="lgbm_all"), "lgbm_ds": lambda: GlobalLGBMDeseason(), "lgbm": lambda: GlobalLGBM(), "lgbm_no_nat": lambda: GlobalLGBM(use_national_seasonality=False, name="lgbm_no_nat"), "prophet": lambda: Prophet_(False), "prophet_yearly": lambda: Prophet_(True)}
+def _chronos2(bc=False):
+    from src.forecast.foundation import Chronos2, Chronos2Backcast
+    return Chronos2Backcast() if bc else Chronos2()
+
+
+REGISTRY = {**REGISTRY, "chronos2": _chronos2, "chronos2_bc": lambda: _chronos2(True), "chronos_bolt": _chronos_bolt, "chronos_bolt_bc": _chronos_bolt_bc, "lgbm_catmo": lambda: GlobalLGBMX(cat_mo=True, name="lgbm_catmo"), "lgbm_natcat": lambda: GlobalLGBMX(nat_cat=True, name="lgbm_natcat"), "lgbm_all": lambda: GlobalLGBMX(cat_mo=True, nat_cat=True, name="lgbm_all"), "lgbm_ds": lambda: GlobalLGBMDeseason(), "lgbm": lambda: GlobalLGBM(), "lgbm_no_nat": lambda: GlobalLGBM(use_national_seasonality=False, name="lgbm_no_nat"), "prophet": lambda: Prophet_(False), "prophet_yearly": lambda: Prophet_(True)}
 
 
 def main():
