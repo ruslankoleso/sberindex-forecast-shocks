@@ -13,7 +13,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
-import lightgbm as lgb
+
+
+def _lgb():
+    """Ленивый импорт: lightgbm и torch не должны загружаться в одном процессе (macOS, libomp)."""
+    import lightgbm
+    return lightgbm
 
 
 def load_national(cfg):
@@ -94,7 +99,7 @@ class GlobalLGBM:
         idx = train.index
         o = len(v) - 1
         X, y, w = self._dataset(v, idx, o)
-        m = lgb.LGBMRegressor(**self.cfg["lgbm"])
+        m = _lgb().LGBMRegressor(**self.cfg["lgbm"])
         m.fit(X, y, sample_weight=w)
         out = []
         for h in range(1, steps + 1):
@@ -167,7 +172,7 @@ class GlobalLGBMDeseason:
                 y.append(self._target(v, idx, o2, h))
                 w.append(np.exp(v[o2]) * h)
         X, y, w = pd.concat(X, ignore_index=True), np.concatenate(y), np.concatenate(w)
-        m = lgb.LGBMRegressor(**self.cfg["lgbm"])
+        m = _lgb().LGBMRegressor(**self.cfg["lgbm"])
         m.fit(X, y, sample_weight=w)
         out = []
         for h in range(1, steps + 1):
