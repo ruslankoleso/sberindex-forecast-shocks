@@ -11,3 +11,4 @@ lxml
 pypdf
 torch
 chronos-forecasting
+statsmodels
