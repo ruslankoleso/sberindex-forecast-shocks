@@ -1,0 +1,10 @@
+# Фундаментальные модели временных рядов (zero-shot, без дообучения)
+chronos_bolt:
+  model_id: amazon/chronos-bolt-small   # ~48 млн параметров, работает на CPU/MPS
+  device: cpu
+  batch_size: 256
+  quantiles: [0.1, 0.5, 0.9]
+chronos2:
+  model_id: amazon/chronos-2
+  device: cpu
+  batch_size: 128

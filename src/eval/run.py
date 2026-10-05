@@ -1,5 +1,10 @@
 """Запуск: python -m src.eval.run --config configs/eval.yaml"""
 import argparse
+
+try:  # torch должен загрузиться раньше lightgbm: иначе конфликт libomp и segfault на macOS
+    import torch  # noqa: F401
+except ImportError:
+    pass
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +18,17 @@ from src.forecast.prophet_model import Prophet_
 
 from src.forecast.lgbm_model import GlobalLGBM, GlobalLGBMDeseason, GlobalLGBMX
 
-REGISTRY = {**REGISTRY, "lgbm_catmo": lambda: GlobalLGBMX(cat_mo=True, name="lgbm_catmo"), "lgbm_natcat": lambda: GlobalLGBMX(nat_cat=True, name="lgbm_natcat"), "lgbm_all": lambda: GlobalLGBMX(cat_mo=True, nat_cat=True, name="lgbm_all"), "lgbm_ds": lambda: GlobalLGBMDeseason(), "lgbm": lambda: GlobalLGBM(), "lgbm_no_nat": lambda: GlobalLGBM(use_national_seasonality=False, name="lgbm_no_nat"), "prophet": lambda: Prophet_(False), "prophet_yearly": lambda: Prophet_(True)}
+def _chronos_bolt():
+    from src.forecast.foundation import ChronosBolt
+    return ChronosBolt()
+
+
+def _chronos_bolt_bc():
+    from src.forecast.foundation import ChronosBoltBackcast
+    return ChronosBoltBackcast()
+
+
+REGISTRY = {**REGISTRY, "chronos_bolt": _chronos_bolt, "chronos_bolt_bc": _chronos_bolt_bc, "lgbm_catmo": lambda: GlobalLGBMX(cat_mo=True, name="lgbm_catmo"), "lgbm_natcat": lambda: GlobalLGBMX(nat_cat=True, name="lgbm_natcat"), "lgbm_all": lambda: GlobalLGBMX(cat_mo=True, nat_cat=True, name="lgbm_all"), "lgbm_ds": lambda: GlobalLGBMDeseason(), "lgbm": lambda: GlobalLGBM(), "lgbm_no_nat": lambda: GlobalLGBM(use_national_seasonality=False, name="lgbm_no_nat"), "prophet": lambda: Prophet_(False), "prophet_yearly": lambda: Prophet_(True)}
 
 
 def main():
