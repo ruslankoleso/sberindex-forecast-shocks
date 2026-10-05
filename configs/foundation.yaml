@@ -9,3 +9,19 @@ chronos2:
   device: cpu
   batch_size: 256
   quantiles: [0.1, 0.5, 0.9]
+timesfm:
+  # веса скачаны в models/ (через curl: загрузчик Hugging Face на этой машине зависал)
+  model_id: models/timesfm-2.5-200m-pytorch   # оригинал: google/timesfm-2.5-200m-pytorch
+  max_context: 1024
+  max_horizon: 256
+tirex:
+  model_id: models/TiRex/model.ckpt   # оригинал: NX-AI/TiRex
+  device: cpu
+chronos2_ft:                 # дообучение Chronos-2 перед каждой точкой прогноза
+  mode: full
+  num_steps: 300
+  batch_size: 64
+  learning_rate: 1.0e-5
+  prediction_length: 12
+  seed: 42
+  output_dir: data/interim/chronos2_ft

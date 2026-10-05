@@ -7,3 +7,4 @@ data/interim/
 *.pt
 *.ckpt
 .env
+models/
