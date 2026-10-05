@@ -12,8 +12,9 @@ chronos2:
 timesfm:
   # веса скачаны в models/ (через curl: загрузчик Hugging Face на этой машине зависал)
   model_id: models/timesfm-2.5-200m-pytorch   # оригинал: google/timesfm-2.5-200m-pytorch
-  max_context: 1024
-  max_horizon: 256
+  max_context: 128      # наши ряды 12–72 точки; 1024 по умолчанию — лишняя работа
+  max_horizon: 128
+  batch_size: 256        # по умолчанию 1 ряд за раз — очень медленно на CPU
 tirex:
   model_id: models/TiRex/model.ckpt   # оригинал: NX-AI/TiRex
   device: cpu

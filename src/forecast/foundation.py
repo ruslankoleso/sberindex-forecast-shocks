@@ -113,6 +113,7 @@ class TimesFM:
         self.model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(cfg["model_id"])
         self.model.compile(timesfm.ForecastConfig(
             max_context=cfg["max_context"], max_horizon=cfg["max_horizon"], normalize_inputs=True,
+            per_core_batch_size=cfg["batch_size"],
             use_continuous_quantile_head=True, force_flip_invariance=True,
             infer_is_positive=True, fix_quantile_crossing=True))
         self.backcast = backcast
