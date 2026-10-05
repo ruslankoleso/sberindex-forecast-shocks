@@ -9,7 +9,8 @@ candidates:
   - lgbm_catmo
   - lgbm_no_nat
   - chronos2_bc
+  - chronos2_ft
   - prophet
-min_past_origins: 2     # минимум прошлых точек, чтобы подбирать веса; иначе — запасная модель
+min_past_origins: 1     # минимум прошлых точек (каждая — 2 016 МО), чтобы подбирать веса; иначе — запасная модель
 fallback: snaive_natg   # что использовать, если прошлого для подбора нет (в т. ч. h=12)
-methods: [best_past, inv_mae, nnls]
+methods: [best_past, top2, top3, top5, inv_mae, nnls]

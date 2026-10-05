@@ -3,6 +3,7 @@
 Для горизонта h и точки прогноза o веса считаются только по прогнозам
 на прошлые точки o' с известным фактом: o' + h <= o. Методы:
 - best_past — берём одну модель с наименьшим MAE на прошлых точках;
+- topK      — простое среднее K моделей, лучших по MAE на прошлых точках;
 - inv_mae   — среднее моделей с весами 1 / MAE на прошлых точках;
 - nnls      — неотрицательные веса (сумма 1), минимизирующие ошибку на прошлых точках.
 Если прошлых точек меньше min_past_origins (например, h=12 — всего одна точка),
@@ -38,6 +39,11 @@ def weights(past, cands, method):
         mae = {m: np.abs(past[m].values - y).mean() for m in cands}
         best = min(mae, key=mae.get)
         return {m: float(m == best) for m in cands}
+    if method.startswith("top"):
+        k = int(method[3:])
+        mae = {m: np.abs(past[m].values - y).mean() for m in cands}
+        best = sorted(mae, key=mae.get)[:k]
+        return {m: (1 / k if m in best else 0.0) for m in cands}
     if method == "inv_mae":
         inv = {m: 1 / np.abs(past[m].values - y).mean() for m in cands}
         s = sum(inv.values())
