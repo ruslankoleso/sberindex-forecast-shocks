@@ -92,10 +92,10 @@ if __name__ == "__main__":
     from concurrent.futures import ThreadPoolExecutor
     cfg = yaml.safe_load(Path("configs/news.yaml").read_text(encoding="utf-8"))
     Path(cfg["raw_dir"]).mkdir(parents=True, exist_ok=True)
-    # потоки: рубрика × половина периода; внутри потока пауза delay_sec между запросами
-    mid = pd.Timestamp(cfg["start"]) + (pd.Timestamp(cfg["end"]) - pd.Timestamp(cfg["start"])) / 2
-    jobs = [(r, s, e) for r in cfg["rubrics"]
-            for s, e in [(cfg["start"], mid.normalize()), (mid.normalize() + pd.Timedelta(days=1), cfg["end"])]]
+    # потоки: рубрика × часть периода (n_parts); внутри потока пауза delay_sec между запросами
+    edges = pd.date_range(cfg["start"], cfg["end"], periods=cfg.get("n_parts", 2) + 1).normalize()
+    parts = [(edges[i] + pd.Timedelta(days=int(i > 0)), edges[i + 1]) for i in range(len(edges) - 1)]
+    jobs = [(r, s, e) for r in cfg["rubrics"] for s, e in parts]
     with ThreadPoolExecutor(len(jobs)) as ex:
         list(ex.map(lambda j: collect_rubric(j[0], cfg, j[1], j[2]), jobs))
     d = build_table(cfg)

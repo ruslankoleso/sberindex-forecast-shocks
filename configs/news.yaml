@@ -5,6 +5,7 @@ start: "2022-12-01"               # с запасом на месяц до на�
 end: "2024-12-31"
 delay_sec: 1.0                    # пауза между запросами (вежливый сбор)
 max_pages_per_day: 15
+n_parts: 4                        # период делится на части, по потоку на рубрику × часть
 raw_dir: data/external/news/raw   # кэш страниц (по одному json на рубрику-день)
 headlines_file: data/external/news/headlines.parquet
 

@@ -67,6 +67,34 @@ def explanation(cfg, seed=42):
     return ex, base
 
 
+def early_warning(cfg, topics=("emergency", "industry_neg"), horizon=3):
+    """Относительный риск: P(тревога в месяцы m+1..m+horizon | были новости в месяце m)
+    / P(тревога в m+1..m+horizon | новостей не было). Только МО с полной историей, m ∈ 2024."""
+    reg, mo, ref = load(cfg)
+    sh = pd.read_parquet("data/interim/changepoint/panel_shocks.parquet")
+    al = sh[(sh.detector == "base_residual") & ~sh.seasonal][["territory_id", "alarm"]]
+    first_alarm = al.groupby("territory_id").alarm.min()
+    terr = pd.read_parquet("data/interim/territories.parquet")
+    full = terr[terr.months == 24].territory_id.values
+    regc = reg.assign(k=reg[list(topics)].sum(axis=1)).pivot_table(index="region", columns="month", values="k", aggfunc="sum")
+    moc = mo.assign(k=mo[list(topics)].sum(axis=1)).pivot_table(index="territory_id", columns="month", values="k", aggfunc="sum")
+    rows = []
+    for m in pd.date_range("2024-01-01", "2024-09-01", freq="MS"):
+        win = pd.date_range(m + pd.DateOffset(months=1), m + pd.DateOffset(months=horizon), freq="MS")
+        for tid in full:
+            fa = first_alarm.get(tid)
+            if fa is not None and fa <= m:                # шок уже был раньше — не раннее предупреждение
+                continue
+            r = ref.loc[tid, "region"] if tid in ref.index else None
+            n = (moc.loc[tid, m] if tid in moc.index and m in moc.columns else 0) or 0
+            n += (regc.loc[r, m] if isinstance(r, str) and r in regc.index and m in regc.columns else 0) or 0
+            rows.append(dict(territory_id=tid, month=m, news=n > 0, alarm=fa is not None and fa in win))
+    d = pd.DataFrame(rows)
+    p1, p0 = d[d.news].alarm.mean(), d[~d.news].alarm.mean()
+    return dict(n_with_news=int(d.news.sum()), n_without=int((~d.news).sum()),
+                p_alarm_with_news=p1, p_alarm_without=p0, relative_risk=p1 / p0 if p0 > 0 else np.nan)
+
+
 if __name__ == "__main__":
     cfg = yaml.safe_load(Path("configs/news.yaml").read_text(encoding="utf-8"))
     ex, base = explanation(cfg)
@@ -76,3 +104,6 @@ if __name__ == "__main__":
         print(f"  доля с новостями ({lvl}): шоки {(ex[lvl] > 0).mean():.0%}, случайные МО {(base[lvl] > 0).mean():.0%};"
               f" среднее число: {ex[lvl].mean():.1f} против {base[lvl].mean():.1f}")
     print(ex.sort_values("news_mo", ascending=False).head(12).to_string(index=False))
+    ew = early_warning(cfg)
+    print("Раннее предупреждение (новости о ЧС/закрытии производств в месяце m → тревога в m+1..m+3):")
+    print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in ew.items()})
