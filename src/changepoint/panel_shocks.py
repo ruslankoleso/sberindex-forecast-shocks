@@ -18,7 +18,7 @@ from src.changepoint.benchmark import relative_signal
 from src.changepoint.detectors import DETECTORS
 from src.eval.cv import load_wide
 
-MAIN = ["forecast_residual", "pelt", "bocpd"]
+MAIN = ["base_residual", "pelt", "bocpd"]   # base_residual — лучший по бенчмарку
 
 
 def jump(x, t, k=2):
@@ -33,15 +33,22 @@ def run(warmup=8):
     X = relative_signal(Y)
     thr = pd.read_csv("data/interim/changepoint/thresholds.csv", index_col=0)["threshold"]
     ref = pd.read_parquet("data/external/territory_reference.parquet").set_index("territory_id")
+    from src.changepoint.benchmark import base_residual_scores, panel_sigma
+    from src.forecast.lgbm_model import load_national
+    L = load_national(yaml.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8")))
+    (sigma, center), logY = panel_sigma(Y, L), np.log(Y)
+    dets = dict(DETECTORS)
     rows = []
     for c in X.columns:
         x = X[c].values
+        dets["base_residual"] = lambda x_, warmup, c=c: base_residual_scores(logY[c].values, L, Y.index, sigma, warmup, center=center)
         for d in MAIN:
-            s = DETECTORS[d](x, warmup=warmup)
-            idx = np.where(s[warmup:] > thr[d])[0]
+            s = dets[d](x, warmup=warmup)
+            m0 = 12                                    # дежурство с января 2024, как в бенчмарке
+            idx = np.where(s[m0:] > thr[d])[0]
             if not len(idx):
                 continue
-            a = warmup + idx[0]
+            a = m0 + idx[0]
             # дата начала сдвига: месяц наибольшего скачка в окне [a−3, a]
             cands = [t for t in range(max(warmup, a - 3), a + 1)]
             t0 = max(cands, key=lambda t: abs(np.nan_to_num(jump(x, t))))

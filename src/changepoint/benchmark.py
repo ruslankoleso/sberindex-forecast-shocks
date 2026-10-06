@@ -8,6 +8,7 @@
   - доля найденных шоков (тревога в [τ, τ+tolerance]),
   - средняя задержка обнаружения (мес.),
   - реакция на разовые выбросы (чем меньше, тем лучше: выброс — не перелом).
+Все детекторы «дежурят» в одном окне (с monitor_from), порог подбирается для этого окна.
 Запуск: python -m src.changepoint.benchmark
 """
 from pathlib import Path
@@ -36,6 +37,39 @@ def inject(x, kind, size, tau):
     return x
 
 
+def base_residual_scores(logy, L, idx, sigma, warmup, consec=2, center=None):
+    """Детектор по ошибке прогноза национальной основы на 1 мес.:
+    прогноз месяца t = траты МО год назад × рост страны за год на t−1;
+    ошибка e_t = log факт − log прогноз; из неё вычитается медианная ошибка всех МО в этом
+    месяце (общий промах прогноза — это не шок конкретного МО; общероссийские шоки
+    ловит детектор на национальном ряде) и результат делится на σ_t — устойчивый разброс
+    ошибок всех МО в этом месяце (собственная история МО для оценки разброса не нужна).
+    score_t — минимальная |e|/σ за последние `consec` мес., если ошибки одного знака."""
+    T = len(logy)
+    e = np.full(T, np.nan)
+    for t in range(12, T):
+        g = L[idx[t - 1]] - L[idx[t - 1] - pd.DateOffset(years=1)]
+        e[t] = (logy[t] - (logy[t - 12] + g) - center[t]) / sigma[t]
+    score = np.zeros(T)
+    for t in range(max(warmup, 12 + consec - 1), T):
+        last = e[t - consec + 1:t + 1]
+        if np.all(np.sign(last) == np.sign(last[0])):
+            score[t] = np.abs(last).min()
+    return score
+
+
+def panel_sigma(Y, L):
+    """Медиана и устойчивый (по MAD) разброс ошибок прогноза основы по всем МО в каждом месяце."""
+    lY = np.log(Y.values)
+    sig, cen = np.full(len(Y), np.nan), np.full(len(Y), np.nan)
+    for t in range(12, len(Y)):
+        g = L[Y.index[t - 1]] - L[Y.index[t - 1] - pd.DateOffset(years=1)]
+        e = lY[t] - (lY[t - 12] + g)
+        cen[t] = np.median(e)
+        sig[t] = np.median(np.abs(e - cen[t])) * 1.4826
+    return sig, cen
+
+
 def first_alarm(score, thr, start):
     idx = np.where(score[start:] > thr)[0]
     return start + idx[0] if len(idx) else None
@@ -49,19 +83,28 @@ def run(cfg):
     Y = load_wide(yaml.safe_load(Path("configs/eval.yaml").read_text(encoding="utf-8")))
     X = relative_signal(Y)
     cols = rng.choice(X.columns, cfg["n_series"], replace=False)
-    w, tol = cfg["warmup"], cfg["tolerance"]
+    w, tol, m0 = cfg["warmup"], cfg["tolerance"], cfg["monitor_from"]
     taus = rng.integers(cfg["tau_range"][0], cfg["tau_range"][1] + 1, len(cols))
+    from src.forecast.lgbm_model import load_national
+    L = load_national(yaml.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8")))
+    sigma, center = panel_sigma(Y, L)
+    logY = np.log(Y)
+    dets = dict(DETECTORS)
+    # сигнал x = log y − медиана; сдвиг x на Δ ≡ сдвиг log y на Δ, поэтому для base_residual
+    # восстанавливаем log y = x + медиана
+    med = logY.median(axis=1).values
+    dets["base_residual"] = lambda x, warmup: base_residual_scores(x + med, L, Y.index, sigma, warmup, center=center)
 
     rows = []
-    for dname, det in DETECTORS.items():
+    for dname, det in dets.items():
         null_scores = [det(X[c].values, warmup=w) for c in cols]
-        # порог: (1 − target)-квантиль максимального сигнала на рядах без шока
-        thr = np.quantile([s[w:].max() for s in null_scores], 1 - cfg["target_false_alarm"])
+        # порог: (1 − target)-квантиль максимального сигнала в окне дежурства на рядах без шока
+        thr = np.quantile([s[m0:].max() for s in null_scores], 1 - cfg["target_false_alarm"])
         THRESHOLDS[dname] = float(thr)
         for sname, sc in cfg["scenarios"].items():
             for c, tau in zip(cols, taus):
                 s = det(inject(X[c].values, sc["type"], sc["size"], tau), warmup=w)
-                a = first_alarm(s, thr, w)
+                a = first_alarm(s, thr, m0)
                 rows.append(dict(detector=dname, scenario=sname, kind=sc["type"], tau=tau,
                                  alarm=a, early=(a is not None and a < tau),
                                  hit=(a is not None and tau <= a <= tau + tol),
