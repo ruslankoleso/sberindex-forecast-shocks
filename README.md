@@ -2,6 +2,7 @@
 
 Решение кейса СберИндекса «Прогнозирование и обнаружение точек структурных изменений»: прогноз безналичных потребительских расходов в 2 190 муниципальных образованиях на 1, 3, 6 и 12 месяцев и обнаружение шоков, совмещённое с прогнозом.
 
+- **Презентация (лендинг):** [reports/landing/index.html](reports/landing/index.html) · **Методологический отчёт:** [reports/REPORT.md](reports/REPORT.md)
 - **Объяснение простым языком:** [docs/EXPLAINED.md](docs/EXPLAINED.md)
 - **Журнал решений с цифрами:** [docs/DECISIONS.md](docs/DECISIONS.md)
 - **Данные:** [docs/DATA.md](docs/DATA.md) · **Задание:** [docs/CASE.md](docs/CASE.md) · **Статус по критериям:** [docs/CRITERIA_TRACKER.md](docs/CRITERIA_TRACKER.md)

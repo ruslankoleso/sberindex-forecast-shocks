@@ -90,7 +90,7 @@ def detectors():
         cols = [BLUE if k == "base_residual" else MUTED for k in s.index]
         ax.barh(lab, s[col] * 100, color=cols, height=0.6)
         for i, v in enumerate(s[col] * 100):
-            ax.text(v + 1, i, f"{v:.0f} %", va="center", fontsize=8, color=INK2)
+            ax.text(v + 1, i, f"{np.floor(v + 0.5):.0f} %", va="center", fontsize=8, color=INK2)
         _style(ax, title)
         ax.grid(axis="x", color=GRID); ax.grid(axis="y", visible=False)
         ax.set_xlim(0, 100)
