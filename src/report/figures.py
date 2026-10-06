@@ -135,8 +135,34 @@ def national_events():
     fig.tight_layout(); fig.savefig(OUT / "05_national_events.png", dpi=160); plt.close(fig)
 
 
+def news_case(tid=1673, region="Оренбургской области", name="Орск"):
+    """Пример согласования новостей и данных: всплеск новостей о паводке → ошибка прогноза МО."""
+    from src.changepoint.benchmark import panel_sigma
+    from src.eval.cv import load_wide
+    from src.forecast.lgbm_model import load_national
+    Y = load_wide(yaml.safe_load(Path("configs/eval.yaml").read_text(encoding="utf-8")))
+    L = load_national(yaml.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8")))
+    sig, cen = panel_sigma(Y, L)
+    ly = np.log(Y[tid].values)
+    e = [(ly[t] - (ly[t - 12] + L[Y.index[t - 1]] - L[Y.index[t - 1] - pd.DateOffset(years=1)]) - cen[t]) / sig[t]
+         for t in range(12, 24)]
+    reg = pd.read_parquet("data/external/news/news_region_monthly.parquet")
+    reg = reg[(reg.region == region) & (reg.month >= "2023-07-01")]
+    k = reg.set_index("month")[["emergency", "social_pay", "industry_neg"]].sum(axis=1)
+    thr = pd.read_csv("data/interim/changepoint/thresholds.csv", index_col=0)["threshold"]["base_residual"]
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(9, 5.5), facecolor=SURFACE, sharex=True)
+    a1.bar(k.index, k.values, width=20, color=ORANGE)
+    _style(a1, f"Новости о ЧС и выплатах: {region.replace('ской области', 'ская область')}", "число заголовков")
+    a2.plot(Y.index[12:], e, color=BLUE, linewidth=2, marker="o", markersize=4)
+    a2.axhline(thr, color=MUTED, linestyle="--", linewidth=1)
+    a2.text(Y.index[12], thr + 0.1, "порог тревоги", fontsize=8, color=INK2)
+    _style(a2, f"{name}: ошибка прогноза относительно других МО (в сигмах)", "σ")
+    _dates(a2, 2)
+    fig.tight_layout(); fig.savefig(OUT / "06_news_case_orsk.png", dpi=160); plt.close(fig)
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     plt.rcParams["font.family"] = "DejaVu Sans"
-    for f in (mae_by_horizon, example_forecast, detectors, shock_examples, national_events):
+    for f in (mae_by_horizon, example_forecast, detectors, shock_examples, national_events, news_case):
         f(); print("готово:", f.__name__)

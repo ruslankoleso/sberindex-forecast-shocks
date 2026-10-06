@@ -107,3 +107,48 @@ if __name__ == "__main__":
     ew = early_warning(cfg)
     print("Раннее предупреждение (новости о ЧС/закрытии производств в месяце m → тревога в m+1..m+3):")
     print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in ew.items()})
+
+
+def news_spikes(cfg, topics=("emergency", "industry_neg", "social_pay"), min_count=3, ratio=3.0):
+    """Всплеск новостей о регионе: в месяце не меньше min_count значимых новостей и в ratio раз
+    больше медианы этого региона по всем месяцам. Возвращает (регион, месяц, число)."""
+    reg, _, _ = load(cfg)
+    reg = reg.assign(k=reg[list(topics)].sum(axis=1))
+    w = reg.pivot_table(index="region", columns="month", values="k", aggfunc="sum").fillna(0)
+    med = w.median(axis=1).clip(lower=1)
+    sp = w.stack().rename("k").reset_index()
+    sp = sp[(sp.k >= min_count) & (sp.k >= ratio * sp.region.map(med))]
+    return sp
+
+
+def residual_response(cfg, lags=(0, 1, 2)):
+    """Средняя |стандартизованная ошибка прогноза основы| у МО региона в месяцы m+lag
+    после всплеска новостей о регионе в месяце m — против МО без всплеска в тот же месяц."""
+    import yaml as _y
+    from src.changepoint.benchmark import panel_sigma
+    from src.eval.cv import load_wide
+    from src.forecast.lgbm_model import load_national
+    Y = load_wide(_y.safe_load(Path("configs/eval.yaml").read_text(encoding="utf-8")))
+    L = load_national(_y.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8")))
+    sig, cen = panel_sigma(Y, L)
+    lY = np.log(Y.values)
+    E = np.full(lY.shape, np.nan)
+    for t in range(12, len(Y)):
+        g = L[Y.index[t - 1]] - L[Y.index[t - 1] - pd.DateOffset(years=1)]
+        E[t] = (lY[t] - (lY[t - 12] + g) - cen[t]) / sig[t]
+    E = pd.DataFrame(np.abs(E), index=Y.index, columns=Y.columns)
+    ref = pd.read_parquet("data/external/territory_reference.parquet").set_index("territory_id")
+    region = ref["region"].reindex(Y.columns)
+    sp = news_spikes(cfg)
+    rows = []
+    for lag in lags:
+        for r in sp.itertuples():
+            t = r.month + pd.DateOffset(months=lag)
+            if t not in E.index or t < pd.Timestamp("2024-01-01"):
+                continue
+            inreg = region == r.region
+            if inreg.sum() == 0:
+                continue
+            rows.append(dict(lag=lag, region=r.region, month=r.month, n_mo=int(inreg.sum()),
+                             err_region=E.loc[t, inreg.values].mean(), err_other=E.loc[t, ~inreg.values].mean()))
+    return pd.DataFrame(rows), sp
