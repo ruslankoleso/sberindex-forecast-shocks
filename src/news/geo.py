@@ -35,7 +35,7 @@ def build_gazetteer(ref: pd.DataFrame, places_cfg="configs/news_places.yaml"):
     rows = []
     for tid, r in ref.iterrows():
         c = city_name(r["mo_name"])
-        if c and len(c) >= 4:
+        if c and len(stem(c)) >= 4:                     # «Урай» → «Ура» совпало бы с «Ураган»
             rows.append(dict(pattern=stem(c), territory_id=tid, region=r["region"], kind="city"))
     for reg in ref["region"].dropna().unique():
         m = re.match(r"^([А-ЯЁ][а-яё\-]+)(ской|цкой|ого|ой) (области|края)$", reg)

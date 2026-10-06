@@ -33,9 +33,10 @@ def load_headlines(cfg):
 
 def add_topics(d, topics):
     low = d.title.str.lower()
-    for name, pats in topics.items():
-        d[name] = low.str.contains("|".join(pats), regex=True)
-    return d
+    # граница слова задаётся явно: в pandas 3 строки обрабатывает RE2, где \b понимает только латиницу
+    new = {name: low.str.contains(r"(?:^|[^а-яёa-z0-9])(?:" + "|".join(pats) + ")", regex=True)
+           for name, pats in topics.items()}
+    return pd.concat([d, pd.DataFrame(new, index=d.index)], axis=1)
 
 
 def build(cfg):
