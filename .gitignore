@@ -8,3 +8,5 @@ data/interim/
 *.ckpt
 .env
 models/
+data/external/news/raw/
+data/external/news/headlines*.parquet

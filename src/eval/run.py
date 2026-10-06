@@ -31,6 +31,7 @@ REGISTRY = {
     "lgbm_natcat": _lazy(FC + "lgbm_model", "GlobalLGBMX", nat_cat=True, name="lgbm_natcat"),
     "lgbm_all": _lazy(FC + "lgbm_model", "GlobalLGBMX", cat_mo=True, nat_cat=True, name="lgbm_all"),
     "lgbm_resid": _lazy(FC + "resid_model", "ResidLGBM"),
+    "lgbm_resid_news": _lazy(FC + "resid_model", "ResidLGBM", news=True, name="lgbm_resid_news"),
     "lgbm_resid_plain": _lazy(FC + "resid_model", "ResidLGBM", spatial=False, cats=False, name="lgbm_resid_plain"),
     "snaive_nat_ets": _lazy(FC + "national", "SNaiveNationalForecast", method="ets"),
     "snaive_nat_chronos2": _lazy(FC + "national", "SNaiveNationalForecast", method="chronos2"),

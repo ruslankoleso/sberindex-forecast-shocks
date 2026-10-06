@@ -27,10 +27,12 @@ from src.forecast.lgbm_model import load_national
 class ResidLGBM:
     name = "lgbm_resid"
 
-    def __init__(self, cfg_path="configs/forecast.yaml", spatial=True, cats=True, name=None):
+    def __init__(self, cfg_path="configs/forecast.yaml", spatial=True, cats=True, news=False, name=None):
         self.cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))
         self.L = load_national(self.cfg)
-        self.spatial, self.cats = spatial, cats
+        self.spatial, self.cats, self.news = spatial, cats, news
+        if news:
+            self._load_news()
         if name:
             self.name = name
         dcfg = yaml.safe_load(Path("configs/data.yaml").read_text(encoding="utf-8"))
@@ -44,6 +46,31 @@ class ResidLGBM:
             p = p[p["category"] != "Все категории"]
             self.cat_wide = {c: g.pivot(index="period", columns="territory_id", values="value")
                              for c, g in p.groupby("category")}
+
+    NEWS_TOPICS = ["emergency", "industry_neg", "industry_pos", "social_pay", "attack"]
+
+    def _load_news(self):
+        """Новости по региону и МО за месяц (доля от всех новостей месяца).
+        Используются только месяцы ≤ origin — см. правило согласования в src/news/features.py."""
+        d = Path("data/external/news")
+        reg = pd.read_parquet(d / "news_region_monthly.parquet")
+        mo = pd.read_parquet(d / "news_mo_monthly.parquet")
+        tot = pd.read_parquet(d / "news_national_monthly.parquet").set_index("month")["n_total"]
+        ref = pd.read_parquet("data/external/territory_reference.parquet").set_index("territory_id")
+        self.news_reg = {t: reg.pivot_table(index="month", columns="region", values=t, aggfunc="sum")
+                         .div(tot, axis=0) * 1000 for t in self.NEWS_TOPICS}
+        self.news_mo = mo.pivot_table(index="month", columns="territory_id", values="n", aggfunc="sum").div(tot, axis=0) * 1000
+        self.terr_region = ref["region"]
+
+    def _news_arrays(self, idx, cols):
+        regs = self.terr_region.reindex(cols)
+        arr = {}
+        for t, w in self.news_reg.items():
+            m = w.reindex(idx).fillna(0.0)
+            arr[t] = np.stack([m[r].values if isinstance(r, str) and r in m.columns else np.zeros(len(idx))
+                               for r in regs], axis=1)
+        arr["mo_mentions"] = self.news_mo.reindex(index=idx, columns=cols).fillna(0.0).values
+        return arr
 
     def _g(self, t):
         return self.L[t] - self.L[t - pd.DateOffset(years=1)]
@@ -67,6 +94,9 @@ class ResidLGBM:
         if self.cats:
             for c, cv in self.cat_v.items():
                 F[f"sh_{c[:4]}"] = cv[o] - cur
+        if self.news:
+            for k, a in self.news_arr.items():           # только месяцы o и o−1 (≤ origin)
+                F[f"news_{k}"] = a[o] + (a[o - 1] if o >= 1 else 0.0)
         for k, val in static.items():
             F[k] = val
         return F
@@ -85,6 +115,8 @@ class ResidLGBM:
         if self.cats:
             self.cat_v = {c: np.log(w.reindex(index=idx, columns=cols).values)
                           for c, w in self.cat_wide.items()}
+        if self.news:
+            self.news_arr = self._news_arrays(idx, cols)
         base = lambda o2, h: v[o2 + h - 12] + self._g(idx[o2])
         X, y, w = [], [], []
         for o2 in range(0, o):
