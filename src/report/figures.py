@@ -45,7 +45,7 @@ def mae_by_horizon():
     from src.eval.metrics import summarize
     s = pd.concat([s[s.model != "ens_inv_mae"], summarize(ens)])
     t = s.pivot(index="model", columns="h", values="MAE")
-    rows = [("prophet", "Prophet (базовая модель)", ORANGE), ("chronos2_ft", "Chronos-2 дообученный", YELLOW),
+    rows = [("prophet", "Prophet (базовая модель)", ORANGE), ("chronos2_ft_mix", "Chronos-2 дообученный (форма года МО)", YELLOW),
             ("snaive_natg", "Сезонная наивная с дрейфом", AQUA), ("ens_inv_mae", "Ансамбль (веса по обратной ошибке)", BLUE)]
     fig, ax = _fig(9, 4.6)
     hs = [1, 3, 6, 12]
