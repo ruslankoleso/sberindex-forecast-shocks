@@ -13,6 +13,10 @@ candidates:
   - timesfm_bc
   - tirex_bc
   - timesfm_lora
+  - chronos2_ft_mix
+  - timesfm_lora_mix
+  - tirex_bc_mix
+  - timesfm_bc_mix
   - prophet
 min_past_origins: 1     # минимум прошлых точек (каждая — 2 016 МО), чтобы подбирать веса; иначе — запасная модель
 fallback: snaive_natg   # что использовать, если прошлого для подбора нет (в т. ч. h=12)
