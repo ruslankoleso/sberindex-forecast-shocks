@@ -161,8 +161,26 @@ def news_case(tid=1673, region="Оренбургской области", name="
     fig.tight_layout(); fig.savefig(OUT / "06_news_case_orsk.png", dpi=160); plt.close(fig)
 
 
+def event_study():
+    """Анализ событий: |остаток прогноза| по месяцам до и после крупного события из новостей."""
+    d = pd.read_pickle("data/interim/major_events.pkl")["res"]
+    fig, ax = _fig(9, 4.2)
+    for lab, c in [("названные в новостях города", ORANGE), ("все МО региона события", BLUE)]:
+        prof = d[lab]["profile"]
+        ks = sorted(prof)
+        ax.plot(ks, [prof[k] for k in ks], color=c, linewidth=2, marker="o", markersize=5,
+                label=f"{lab} (n={d[lab]['n']})")
+    ax.axvline(0, color=MUTED, linestyle="--", linewidth=1)
+    ax.text(0.05, ax.get_ylim()[1], " месяц события", color=INK2, fontsize=8, va="top")
+    ax.set_xticks(range(-2, 4), ["−2", "−1", "0", "+1", "+2", "+3"])
+    _style(ax, "Крупные события из новостей → расхождение трат с прогнозом", "|остаток|, в сигмах")
+    ax.set_xlabel("месяцы относительно события", color=INK2, fontsize=9)
+    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    fig.tight_layout(); fig.savefig(OUT / "07_event_study.png", dpi=160); plt.close(fig)
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     plt.rcParams["font.family"] = "DejaVu Sans"
-    for f in (mae_by_horizon, example_forecast, detectors, shock_examples, national_events, news_case):
+    for f in (mae_by_horizon, example_forecast, detectors, shock_examples, national_events, news_case, event_study):
         f(); print("готово:", f.__name__)
