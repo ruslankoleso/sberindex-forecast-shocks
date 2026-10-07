@@ -89,12 +89,32 @@ class Chronos2Backcast(ChronosBoltBackcast):
         super().__init__(key="chronos2", **kw)
 
 
-def _extend(train, nat):
-    """Удлинение истории МО национальным рядом (см. ChronosBoltBackcast)."""
+def _extend(train, nat, mode="national", w=0.5):
+    """Backcasting: ретроспективное восстановление ряда МО до начала данных (2018-12…2022-12).
+
+    mode="national" — ряд России в масштабе МО: форма года (сезонность) — как у страны;
+    mode="own"      — уровень и тренд России × собственная форма года МО;
+    mode="mix"      — форма года = смесь формы страны и формы МО: nat^(1−w) · own^w (shrinkage).
+    Масштаб и форма года МО считаются по первым 12 месяцам ряда (2023 г.), которые всегда
+    раньше точки прогноза; тренд России — 12-месячное скользящее среднее национального ряда.
+    """
     import pandas as pd
     hist = nat[nat.index < train.index[0]]
-    k = train.iloc[:12].mean(0).values / nat.reindex(train.index[:12]).mean()
-    ext = np.vstack([np.outer(hist.values, k), train.values])
+    first = train.iloc[:12]
+    nat_first = nat.reindex(first.index)
+    k = first.mean(0).values / nat_first.mean()
+    if mode == "national":
+        back = np.outer(hist.values, k)
+    else:
+        trend = nat.rolling(12, center=True, min_periods=6).mean().reindex(hist.index).values
+        own = (first / first.mean(0)).values                       # 12 × N, форма года МО
+        nprof = (nat_first / nat_first.mean()).values[:, None]     # 12 × 1, форма года страны
+        prof = own if mode == "own" else nprof ** (1 - w) * own ** w
+        prof = prof / prof.mean(0)                                  # среднее за год = 1
+        moy = {m: i for i, m in enumerate(first.index.month)}
+        rows = np.stack([prof[moy[m]] for m in hist.index.month])   # len(hist) × N
+        back = trend[:, None] * k[None, :] * rows
+    ext = np.vstack([back, train.values])
     return pd.DataFrame(ext, index=hist.index.append(train.index), columns=train.columns)
 
 
@@ -107,7 +127,7 @@ def _nat_level():
 class TimesFM:
     """Google TimesFM 2.5 (200 млн параметров), zero-shot. backcast=True — с удлинённой историей."""
 
-    def __init__(self, backcast=False, cfg_path="configs/foundation.yaml"):
+    def __init__(self, backcast=False, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5):
         import timesfm
         cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["timesfm"]
         self.model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(cfg["model_id"])
@@ -118,12 +138,13 @@ class TimesFM:
             infer_is_positive=True, fix_quantile_crossing=True))
         self.backcast = backcast
         self.nat = _nat_level() if backcast else None
-        self.name = "timesfm_bc" if backcast else "timesfm"
+        self.bc_mode, self.bc_w = bc_mode, bc_w
+        self.name = ("timesfm_bc" + ("" if bc_mode == "national" else f"_{bc_mode}")) if backcast else "timesfm"
         self.last_quantiles = None
 
     def predict(self, train, steps):
         if self.backcast:
-            train = _extend(train, self.nat)
+            train = _extend(train, self.nat, getattr(self, "bc_mode", "national"), getattr(self, "bc_w", 0.5))
         point, q = self.model.forecast(horizon=steps,
                                        inputs=[train[c].values.astype(float) for c in train.columns])
         self.last_quantiles = q[:, :steps, [1, 5, 9]]          # 0,1 / 0,5 / 0,9
@@ -133,18 +154,19 @@ class TimesFM:
 class TiRex:
     """NX-AI TiRex (xLSTM, 35 млн параметров), zero-shot. backcast=True — с удлинённой историей."""
 
-    def __init__(self, backcast=False, cfg_path="configs/foundation.yaml"):
+    def __init__(self, backcast=False, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5):
         from tirex import load_model
         cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["tirex"]
         self.model = load_model(cfg["model_id"], device=cfg["device"])
         self.backcast = backcast
         self.nat = _nat_level() if backcast else None
-        self.name = "tirex_bc" if backcast else "tirex"
+        self.bc_mode, self.bc_w = bc_mode, bc_w
+        self.name = ("tirex_bc" + ("" if bc_mode == "national" else f"_{bc_mode}")) if backcast else "tirex"
         self.last_quantiles = None
 
     def predict(self, train, steps):
         if self.backcast:
-            train = _extend(train, self.nat)
+            train = _extend(train, self.nat, getattr(self, "bc_mode", "national"), getattr(self, "bc_w", 0.5))
         ctx = torch.tensor(train.values.T, dtype=torch.float32)
         q, mean = self.model.forecast(context=ctx, prediction_length=steps)
         q = q.numpy() if hasattr(q, "numpy") else np.asarray(q)
