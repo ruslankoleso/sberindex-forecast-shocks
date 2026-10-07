@@ -46,7 +46,7 @@ def mae_by_horizon():
     s = pd.concat([s[s.model != "ens_inv_mae"], summarize(ens)])
     t = s.pivot(index="model", columns="h", values="MAE")
     rows = [("prophet", "Prophet (базовая модель)", ORANGE), ("chronos2_ft", "Chronos-2 дообученный", YELLOW),
-            ("snaive_natg", "Национальная основа", AQUA), ("ens_inv_mae", "Честный ансамбль", BLUE)]
+            ("snaive_natg", "Сезонная наивная с дрейфом", AQUA), ("ens_inv_mae", "Ансамбль (веса по обратной ошибке)", BLUE)]
     fig, ax = _fig(9, 4.6)
     hs = [1, 3, 6, 12]
     w = 0.2
@@ -80,7 +80,7 @@ def example_forecast(tid=1, name="Майкоп"):
 
 def detectors():
     s = pd.read_csv("data/interim/changepoint/benchmark_summary.csv", index_col=0)
-    names = {"base_residual": "По ошибке нашего прогноза", "pelt": "PELT", "forecast_residual": "По ошибке простого прогноза",
+    names = {"base_residual": "По остаткам прогноза", "pelt": "PELT", "forecast_residual": "По остаткам скользящего среднего",
              "bocpd": "BOCPD", "page_hinkley": "Пейдж–Хинкли", "cusum": "CUSUM"}
     s = s.loc[[k for k in names if k in s.index]].iloc[::-1]
     fig, (a1, a2) = _fig(11, 4.2, 2)
@@ -108,7 +108,7 @@ def shock_examples(items=((1305, "Волгореченск"), (1673, "Орск")
         y = Y[tid]
         base = [y.iloc[t - 12] * np.exp(L[Y.index[t - 1]] - L[Y.index[t - 1] - pd.DateOffset(years=1)]) for t in range(12, 24)]
         ax.plot(Y.index, y, color=INK, linewidth=2, label="Факт")
-        ax.plot(Y.index[12:], base, color=BLUE, linewidth=2, linestyle="--", label="Прогноз основы на 1 мес.")
+        ax.plot(Y.index[12:], base, color=BLUE, linewidth=2, linestyle="--", label="Прогноз сезонной наивной с дрейфом на 1 мес.")
         a = sh[(sh.territory_id == tid) & (sh.detector == "base_residual")]
         if len(a):
             ax.axvline(a.alarm.iloc[0], color=ORANGE, linewidth=2)

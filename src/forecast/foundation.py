@@ -229,3 +229,56 @@ class TimesFMXReg(TimesFM):
             static_categorical_covariates={"region": [int(r) for r in reg]},
             xreg_mode="xreg + timesfm")
         return np.stack([np.asarray(p)[:steps] for p in point], axis=1)
+
+
+class TimesFMLoRA:
+    """TimesFM 2.5 (версия transformers), дообученный LoRA перед каждой точкой прогноза.
+
+    По примеру из навыка timesfm-forecasting (examples/finetuning): адаптер LoRA на все
+    линейные слои, AdamW, косинусное расписание. Обучающие окна (контекст 32 мес. →
+    следующие 12 мес.) нарезаются случайно из рядов МО, обрезанных по origin и удлинённых
+    национальным рядом, — будущее после origin модели недоступно. Прогноз — медиана.
+    """
+    name = "timesfm_lora"
+
+    def __init__(self, cfg_path="configs/foundation.yaml"):
+        self.cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["timesfm_lora"]
+        self.nat = _nat_level()
+
+    def _windows(self, series, rng):
+        c, h = self.cfg["context_len"], self.cfg["horizon_len"]
+        ctx, tgt = [], []
+        for _ in range(self.cfg["num_samples"]):
+            s = series[rng.integers(len(series))]
+            st = rng.integers(0, len(s) - c - h + 1)
+            ctx.append(s[st:st + c]); tgt.append(s[st + c:st + c + h])
+        return torch.tensor(np.array(ctx), dtype=torch.float32), torch.tensor(np.array(tgt), dtype=torch.float32)
+
+    def predict(self, train, steps):
+        from peft import LoraConfig, get_peft_model
+        from transformers import TimesFm2_5ModelForPrediction
+        torch.manual_seed(self.cfg["seed"])
+        rng = np.random.default_rng(self.cfg["seed"])
+        ext = _extend(train, self.nat)
+        series = [ext[c].values.astype(np.float32) for c in ext.columns]
+        base = TimesFm2_5ModelForPrediction.from_pretrained(self.cfg["model_dir"], torch_dtype=torch.float32)
+        model = get_peft_model(base, LoraConfig(r=self.cfg["lora_r"], lora_alpha=self.cfg["lora_alpha"],
+                                                target_modules="all-linear", lora_dropout=0.05, bias="none"))
+        X, T = self._windows(series, rng)
+        opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=self.cfg["lr"], weight_decay=0.01)
+        bs, n_steps = self.cfg["batch_size"], self.cfg["num_steps"]
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=n_steps)
+        model.train()
+        for step in range(n_steps):
+            i = rng.integers(0, len(X), bs)
+            loss = model(past_values=X[i], future_values=T[i], forecast_context_len=self.cfg["context_len"]).loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step(); opt.zero_grad(); sched.step()
+        model.eval()
+        out = []
+        with torch.no_grad():
+            for k in range(0, len(series), 256):
+                o = model(past_values=[torch.tensor(s) for s in series[k:k + 256]])
+                out.append(o.full_predictions[:, :steps, 5].numpy())      # индекс 5 — медиана
+        return np.concatenate(out).T
