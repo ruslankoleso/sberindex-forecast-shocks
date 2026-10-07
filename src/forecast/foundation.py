@@ -279,6 +279,8 @@ class TimesFMLoRA:
         out = []
         with torch.no_grad():
             for k in range(0, len(series), 256):
-                o = model(past_values=[torch.tensor(s) for s in series[k:k + 256]])
+                # без forecast_context_len модель дополняет ряд до 16 384 точек — очень медленно
+                o = model(past_values=[torch.tensor(s) for s in series[k:k + 256]],
+                          forecast_context_len=self.cfg["predict_context_len"])
                 out.append(o.full_predictions[:, :steps, 5].numpy())      # индекс 5 — медиана
         return np.concatenate(out).T

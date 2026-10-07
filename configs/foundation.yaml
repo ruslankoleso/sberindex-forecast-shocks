@@ -30,6 +30,7 @@ timesfm_lora:                # дообучение TimesFM через LoRA (п�
   model_dir: models/timesfm-2.5-200m-transformers   # оригинал: google/timesfm-2.5-200m-transformers
   context_len: 32            # кратно 32; ряд МО с удлинённой историей — 61–72 мес.
   horizon_len: 12
+  predict_context_len: 64     # контекст при прогнозе (кратно 32)
   num_samples: 8000
   num_steps: 150
   batch_size: 64

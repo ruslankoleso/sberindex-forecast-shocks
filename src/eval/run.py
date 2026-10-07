@@ -40,6 +40,7 @@ REGISTRY = {
     "tirex": _lazy(FC + "foundation", "TiRex"),
     "tirex_bc": _lazy(FC + "foundation", "TiRex", backcast=True),
     "chronos2_ft": _lazy(FC + "foundation", "Chronos2FineTuned"),
+    "timesfm_lora": _lazy(FC + "foundation", "TimesFMLoRA"),
     "timesfm_xreg": _lazy(FC + "foundation", "TimesFMXReg"),
     "autoets": _lazy(FC + "nixtla_models", "StatsModel", model="AutoETS"),
     "autoets_bc": _lazy(FC + "nixtla_models", "StatsModel", model="AutoETS", backcast=True),
