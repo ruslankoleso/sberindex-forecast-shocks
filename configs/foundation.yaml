@@ -14,7 +14,7 @@ timesfm:
   model_id: models/timesfm-2.5-200m-pytorch   # оригинал: google/timesfm-2.5-200m-pytorch
   max_context: 128      # наши ряды 12–72 точки; 1024 по умолчанию — лишняя работа
   max_horizon: 128
-  batch_size: 256        # по умолчанию 1 ряд за раз — очень медленно на CPU
+  batch_size: 32         # по умолчанию 1 ряд за раз — очень медленно; 32 — рекомендация навыка TimesFM для CPU 16 ГБ
 tirex:
   model_id: models/TiRex/model.ckpt   # оригинал: NX-AI/TiRex
   device: cpu

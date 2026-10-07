@@ -178,3 +178,54 @@ class Chronos2FineTuned(Chronos2Backcast):
             remove_printer_callback=True, report_to=[], seed=self.ft["seed"])
         # родительский predict снова удлинит историю, поэтому передаём исходный train
         return super().predict(train, steps)
+
+
+class TimesFMXReg(TimesFM):
+    """TimesFM 2.5 с внешними факторами (XReg, режим «xreg + timesfm»).
+
+    Ковариаты подаются на историю И горизонт, поэтому используются только величины,
+    известные заранее (без утечки будущего): месяц года, национальный сезонный профиль
+    (оценён по данным до 2022 г.), число рабочих дней (производственный календарь);
+    статичные — индекс доступности рынков и регион МО. История удлинена национальным рядом
+    (TimesFM нужно ≥ 32 точек контекста).
+    """
+    name = "timesfm_xreg"
+
+    def __init__(self, cfg_path="configs/foundation.yaml"):
+        import timesfm
+        super().__init__(backcast=True, cfg_path=cfg_path)
+        cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["timesfm"]
+        self.model.compile(timesfm.ForecastConfig(
+            max_context=cfg["max_context"], max_horizon=cfg["max_horizon"], normalize_inputs=True,
+            per_core_batch_size=cfg["batch_size"], use_continuous_quantile_head=True,
+            force_flip_invariance=True, infer_is_positive=True, fix_quantile_crossing=True,
+            return_backcast=True))
+        self.name = "timesfm_xreg"
+        import pandas as pd
+        from src.forecast.lgbm_model import load_national, seasonal_index
+        fcfg = yaml.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8"))
+        self.S = seasonal_index(load_national(fcfg), fcfg["seasonal_until"])
+        self.wd = pd.read_parquet("data/external/macro_monthly.parquet")["working_days"]
+        dcfg = yaml.safe_load(Path("configs/data.yaml").read_text(encoding="utf-8"))
+        self.ma = pd.read_parquet(Path(dcfg["organizers_dir"]) / dcfg["market_access_file"]).set_index("territory_id")["market_access"]
+        self.region = pd.read_parquet("data/external/territory_reference.parquet").set_index("territory_id")["region"]
+
+    def predict(self, train, steps):
+        import pandas as pd
+        ext = _extend(train, self.nat)
+        idx = ext.index.append(pd.date_range(ext.index[-1] + pd.DateOffset(months=1), periods=steps, freq="MS"))
+        month = [int(m) for m in idx.month]
+        seas = [float(self.S[m - 1]) for m in idx.month]
+        wd = [float(v) for v in self.wd.reindex(idx).fillna(self.wd.median()).values]
+        cols = list(train.columns)
+        n = len(cols)
+        ma = self.ma.reindex(cols)
+        reg = self.region.reindex(cols).fillna("нет").astype("category").cat.codes
+        point, _ = self.model.forecast_with_covariates(
+            inputs=[ext[c].values.astype(float) for c in cols],
+            dynamic_numerical_covariates={"seasonal": [seas] * n, "working_days": [wd] * n},
+            dynamic_categorical_covariates={"month": [month] * n},
+            static_numerical_covariates={"market_access": ma.fillna(ma.median()).astype(float).tolist()},
+            static_categorical_covariates={"region": [int(r) for r in reg]},
+            xreg_mode="xreg + timesfm")
+        return np.stack([np.asarray(p)[:steps] for p in point], axis=1)

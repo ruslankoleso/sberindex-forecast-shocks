@@ -16,3 +16,8 @@ lgbm:
   n_jobs: 8
   verbose: -1
   random_state: 42
+nhits:                      # глобальная нейросеть N-HiTS (NeuralForecast)
+  input_size: 12
+  max_steps: 300
+  batch_size: 64
+  seed: 42

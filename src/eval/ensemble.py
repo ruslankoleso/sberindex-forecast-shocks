@@ -5,6 +5,7 @@
 - best_past — берём одну модель с наименьшим MAE на прошлых точках;
 - topK      — простое среднее K моделей, лучших по MAE на прошлых точках;
 - inv_mae   — среднее моделей с весами 1 / MAE на прошлых точках;
+- inv_mae_filtered — то же, но только модели, которые на прошлых точках не хуже национальной основы;
 - nnls      — неотрицательные веса (сумма 1), минимизирующие ошибку на прошлых точках.
 Если прошлых точек меньше min_past_origins (например, h=12 — всего одна точка),
 используется запасная модель.
@@ -44,6 +45,14 @@ def weights(past, cands, method):
         mae = {m: np.abs(past[m].values - y).mean() for m in cands}
         best = sorted(mae, key=mae.get)[:k]
         return {m: (1 / k if m in best else 0.0) for m in cands}
+    if method == "inv_mae_filtered":
+        # исключаем модели, которые на прошлых точках были хуже национальной основы
+        mae = {m: np.abs(past[m].values - y).mean() for m in cands}
+        ref = mae.get("snaive_natg", np.inf)
+        keep = [m for m in cands if mae[m] <= ref]
+        inv = {m: (1 / mae[m] if m in keep else 0.0) for m in cands}
+        s = sum(inv.values())
+        return {m: v / s for m, v in inv.items()}
     if method == "inv_mae":
         inv = {m: 1 / np.abs(past[m].values - y).mean() for m in cands}
         s = sum(inv.values())
