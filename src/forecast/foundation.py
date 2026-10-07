@@ -55,22 +55,15 @@ class ChronosBoltBackcast(ChronosBolt):
     """
     name = "chronos_bolt_bc"
 
-    def __init__(self, national_cfg="configs/forecast.yaml", **kw):
+    def __init__(self, national_cfg="configs/forecast.yaml", bc_mode="national", bc_w=0.5, **kw):
         super().__init__(**kw)
         from src.forecast.lgbm_model import load_national
         ncfg = yaml.safe_load(Path(national_cfg).read_text(encoding="utf-8"))
         self.nat = np.exp(load_national(ncfg))
+        self.bc_mode, self.bc_w = bc_mode, bc_w            # форма года при backcasting: national / own / mix
 
     def predict(self, train, steps):
-        start = train.index[0]
-        hist = self.nat[self.nat.index < start]
-        ov = self.nat.reindex(train.index[:12])
-        k = train.iloc[:12].mean(0).values / ov.mean()
-        back = np.outer(hist.values, k)                          # (len(hist), N)
-        ext = np.vstack([back, train.values])
-        import pandas as pd
-        idx = hist.index.append(train.index)
-        return super().predict(pd.DataFrame(ext, index=idx, columns=train.columns), steps)
+        return super().predict(_extend(train, self.nat, self.bc_mode, self.bc_w), steps)
 
 
 class Chronos2(ChronosBolt):
@@ -174,7 +167,7 @@ class TiRex:
         return q[:, :steps, 4].T                                  # медиана
 
 
-class Chronos2FineTuned(Chronos2Backcast):
+class Chronos2FineTuned(Chronos2Backcast):  # noqa: D101
     """Chronos-2, дообученный на наших рядах перед каждой точкой прогноза.
 
     На каждой точке прогноза (origin) копия Chronos-2 дообучается на рядах МО,
@@ -190,7 +183,7 @@ class Chronos2FineTuned(Chronos2Backcast):
         self.ft = yaml.safe_load(Path("configs/foundation.yaml").read_text(encoding="utf-8"))["chronos2_ft"]
 
     def predict(self, train, steps):
-        ext = _extend(train, self.nat)
+        ext = _extend(train, self.nat, self.bc_mode, self.bc_w)
         inputs = [ext[c].values.astype(np.float32) for c in ext.columns]
         torch.manual_seed(self.ft["seed"])
         self.pipe = self.base_pipe.fit(
@@ -263,9 +256,12 @@ class TimesFMLoRA:
     """
     name = "timesfm_lora"
 
-    def __init__(self, cfg_path="configs/foundation.yaml"):
+    def __init__(self, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5):
         self.cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["timesfm_lora"]
         self.nat = _nat_level()
+        self.bc_mode, self.bc_w = bc_mode, bc_w
+        if bc_mode != "national":
+            self.name = f"timesfm_lora_{bc_mode}"
 
     def _windows(self, series, rng):
         c, h = self.cfg["context_len"], self.cfg["horizon_len"]
@@ -281,7 +277,7 @@ class TimesFMLoRA:
         from transformers import TimesFm2_5ModelForPrediction
         torch.manual_seed(self.cfg["seed"])
         rng = np.random.default_rng(self.cfg["seed"])
-        ext = _extend(train, self.nat)
+        ext = _extend(train, self.nat, self.bc_mode, self.bc_w)
         series = [ext[c].values.astype(np.float32) for c in ext.columns]
         base = TimesFm2_5ModelForPrediction.from_pretrained(self.cfg["model_dir"], torch_dtype=torch.float32)
         model = get_peft_model(base, LoraConfig(r=self.cfg["lora_r"], lora_alpha=self.cfg["lora_alpha"],
