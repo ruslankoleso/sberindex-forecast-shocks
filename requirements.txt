@@ -25,3 +25,4 @@ neuralforecast==3.2.2
 jax==0.11.2
 jaxlib==0.11.2
 peft==0.21.2
+openpyxl==3.1.5
