@@ -7,7 +7,6 @@
 | Что | Где |
 |---|---|
 | Презентация | [presentation/presentation.pdf](presentation/presentation.pdf) |
-| Доклад (слайды + текст выступления) | [presentation/speech.pdf](presentation/speech.pdf) |
 | Методологический отчёт | [report/REPORT.md](report/REPORT.md) |
 | Ход работы с кодом, таблицами и графиками | [notebooks/solution.ipynb](notebooks/solution.ipynb) |
 
