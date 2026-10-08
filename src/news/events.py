@@ -206,6 +206,26 @@ def did_test(E, pairs, pre, post, n_perm, seed):
     return obs, float(np.nanmean(null)), float(np.mean(null >= obs))
 
 
+def event_level_test(E, ev, pre, post, n_perm, seed):
+    """Единица анализа — событие (регион-месяц), а не МО: иначе событие в Москве (143 МО) весит
+    как 143 паводка. Нулевое распределение — те же МО события, но случайный месяц."""
+    A = np.abs(E)
+    months = [m for m in E.index if pd.Timestamp("2024-03-01") <= m <= pd.Timestamp("2024-10-01")]
+
+    def delta(tids, m):
+        i = E.index.get_loc(m)
+        return (np.nanmean(A.iloc[[i + k for k in post if i + k < len(A)]][tids].values)
+                - np.nanmean(A.iloc[[i + k for k in pre]][tids].values))
+
+    groups = [list(g.territory_id) for _, g in ev[ev.month >= "2024-03-01"].groupby(["region", "month"])]
+    starts = [m for (_, m), _ in ev[ev.month >= "2024-03-01"].groupby(["region", "month"])]
+    obs = np.mean([delta(t, m) for t, m in zip(groups, starts)])
+    D = [[delta(t, m) for m in months] for t in groups]
+    rng = np.random.default_rng(seed)
+    null = np.array([np.mean([d[rng.integers(len(months))] for d in D]) for _ in range(n_perm)])
+    return dict(n=len(groups), delta=float(obs), null=float(null.mean()), p=float(np.mean(null >= obs)))
+
+
 def event_profile(E, pairs, lo=-2, hi=3):
     out = {}
     for k in range(lo, hi + 1):
@@ -246,6 +266,10 @@ if __name__ == "__main__":
             obs, nm, p = did_test(E, pairs, mj["pre"], mj["post"], cfg["events"]["n_permutations"], cfg["events"]["seed"])
             major[lab] = dict(n=len(pairs), profile=event_profile(E, pairs), delta=obs, null=nm, p=p)
             print(f"[{method}] {lab}: n={len(pairs)}, после−до {obs:+.2f} (случайные {nm:+.2f}), p = {p:.3f}")
+        lvl = event_level_test(E, ev, mj["pre"], mj["post"], cfg["events"]["n_permutations"], cfg["events"]["seed"])
+        major["по событиям"] = lvl
+        print(f"[{method}] по событиям (регион-месяц): n={lvl['n']}, после−до {lvl['delta']:+.2f} "
+              f"(те же МО в случайный месяц {lvl['null']:+.2f}), p = {lvl['p']:.3f}")
         print(ev.groupby(["region", "month"]).agg(n_news=("n_news", "first"), пример=("example", "first")).to_string())
         allres[method] = dict(events=ev, res=major)
     main_method = mj.get("method", "keywords") if mj.get("method") in allres else "keywords"
