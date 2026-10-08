@@ -153,12 +153,19 @@ def write_cards_md(cards, path="reports/shock_cards.md"):
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
-def major_events(cfg, E):
+def major_events(cfg, E, method=None):
     """Крупные события: регион-месяц с ≥ min_news новостями узкого словаря. Затронутые МО —
     названные в этих новостях города, а если городов нет — все МО региона."""
     mj = cfg["major_events"]
     h = pd.read_parquet("data/external/news/headlines_tagged.parquet")
-    h = h[h.title.str.lower().str.contains(mj["pattern"], regex=True)]
+    method = method or mj.get("method", "keywords")
+    kw = h.title.str.lower().str.contains(mj["pattern"], regex=True)
+    if method == "keywords" or not Path("data/external/news/major_llm.parquet").exists():
+        h = h[kw]
+    else:   # «nlp+llm»: (словарь или rubert-tiny2) и подтверждение Qwen (крупная ЧС или закрытие производства)
+        llm = pd.read_parquet("data/external/news/major_llm.parquet")
+        h = h.merge(llm[["url", "llm_major"]], on="url", how="inner")
+        h = h[h.llm_major]
     h = h[(h.mo_ids.str.len() > 0) | (h.regions.str.len() > 0)]
     ref = pd.read_parquet("data/external/territory_reference.parquet").set_index("territory_id")
     rows = []
@@ -225,15 +232,22 @@ if __name__ == "__main__":
     print(f"\nКарточек шоков: {len(cards)}; с новостями: {len(with_news)}; "
           f"новость раньше тревоги: {sum(l > 0 for l in leads)}; в месяц тревоги: {sum(l == 0 for l in leads)}")
     pd.to_pickle(dict(res=res, cards=cards), "data/interim/news_events.pkl")
-    # уточнение: крупные события (узкий словарь, см. configs/news.yaml → major_events)
+    # крупные события: по словарю (вторая попытка) и по разметке нейросетями (третья попытка)
     mj = cfg["major_events"]
-    ev, _ = major_events(cfg, E)
-    major = {}
-    for lab, sub in [("все крупные события", ev), ("названные в новостях города", ev[ev.named]),
-                     ("все МО региона события", ev[~ev.named])]:
-        pairs = [(t, m) for t, m in zip(sub.territory_id, sub.month) if m >= pd.Timestamp("2024-03-01")]
-        obs, nm, p = did_test(E, pairs, mj["pre"], mj["post"], cfg["events"]["n_permutations"], cfg["events"]["seed"])
-        major[lab] = dict(n=len(pairs), profile=event_profile(E, pairs), delta=obs, null=nm, p=p)
-        print(f"{lab}: n={len(pairs)}, после−до {obs:+.2f} (случайные {nm:+.2f}), p = {p:.3f}")
-    print(ev.groupby(["region", "month"]).agg(n_news=("n_news", "first"), пример=("example", "first")).to_string())
-    pd.to_pickle(dict(events=ev, res=major), "data/interim/major_events.pkl")
+    allres = {}
+    for method in ("keywords", "nlp+llm"):
+        if method == "nlp+llm" and not Path("data/external/news/major_llm.parquet").exists():
+            continue
+        ev, _ = major_events(cfg, E, method)
+        major = {}
+        for lab, sub in [("все крупные события", ev), ("названные в новостях города", ev[ev.named]),
+                         ("все МО региона события", ev[~ev.named])]:
+            pairs = [(t, m) for t, m in zip(sub.territory_id, sub.month) if m >= pd.Timestamp("2024-03-01")]
+            obs, nm, p = did_test(E, pairs, mj["pre"], mj["post"], cfg["events"]["n_permutations"], cfg["events"]["seed"])
+            major[lab] = dict(n=len(pairs), profile=event_profile(E, pairs), delta=obs, null=nm, p=p)
+            print(f"[{method}] {lab}: n={len(pairs)}, после−до {obs:+.2f} (случайные {nm:+.2f}), p = {p:.3f}")
+        print(ev.groupby(["region", "month"]).agg(n_news=("n_news", "first"), пример=("example", "first")).to_string())
+        allres[method] = dict(events=ev, res=major)
+    main_method = mj.get("method", "keywords") if mj.get("method") in allres else "keywords"
+    pd.to_pickle(dict(events=allres[main_method]["events"], res=allres[main_method]["res"], method=main_method, all=allres),
+                 "data/interim/major_events.pkl")

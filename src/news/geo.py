@@ -62,9 +62,13 @@ def tag(titles: pd.Series, gaz: pd.DataFrame):
     for t in titles:
         mos, regs = set(), set()
         for m in rx.finditer(t):
+            # «в Смоленской области» — это регион, а не город Смоленск: после прилагательного
+            # идёт слово-тип территории — привязываем только к региону
+            after = t[m.end():m.end() + 12].lower()
+            region_form = bool(re.match(r"\s+(област|кра[йяю]|округ|район|республик)", after))
             for _, r in by_pat.get_group(m.group(1)).iterrows():
                 regs.add(r.region)
-                if r.territory_id is not None and pd.notna(r.territory_id):
+                if r.territory_id is not None and pd.notna(r.territory_id) and not region_form:
                     mos.add(int(r.territory_id))
         out_mo.append(sorted(mos)); out_reg.append(sorted(regs))
     return out_mo, out_reg

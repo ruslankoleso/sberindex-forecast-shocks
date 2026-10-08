@@ -25,7 +25,14 @@ from src.news.geo import build_gazetteer, tag
 
 
 def load_headlines(cfg):
-    d = pd.read_parquet(cfg["headlines_file"])
+    """Заголовки всех источников: Lenta.ru (headlines_file) + дополнительные (headlines_<источник>.parquet)."""
+    parts = [pd.read_parquet(cfg["headlines_file"]).assign(source="lenta")]
+    for name in cfg.get("use_sources", []):
+        f = Path(cfg["headlines_file"]).parent / f"headlines_{name}.parquet"
+        if f.exists():
+            parts.append(pd.read_parquet(f))
+    d = pd.concat([x[["title", "url", "published", "source"]] for x in parts], ignore_index=True)
+    d = d.drop_duplicates("url")
     d = d[(d.published >= cfg["start"]) & (d.published <= pd.Timestamp(cfg["end"]) + pd.Timedelta(days=1))]
     d["month"] = d.published.dt.to_period("M").dt.to_timestamp()
     return d
@@ -70,6 +77,7 @@ if __name__ == "__main__":
     reg.to_parquet(out / "news_region_monthly.parquet", index=False)
     mo.to_parquet(out / "news_mo_monthly.parquet", index=False)
     nat.merge(total, on="month").to_parquet(out / "news_national_monthly.parquet", index=False)
+    print("по источникам:", d.source.value_counts().to_dict())
     print("заголовков:", len(d), "| с привязкой к региону:", round((~d.is_national).mean() * 100, 1), "%",
           "| к МО:", round((d.mo_ids.str.len() > 0).mean() * 100, 1), "%")
     print(d[list(cfg["topics"])].mean().round(3).to_string())
