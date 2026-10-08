@@ -96,6 +96,8 @@ if __name__ == "__main__":
     if "--recheck" in sys.argv and out.exists():
         # строгая инструкция может только снять отметку «Да», поэтому остальных кандидатов не пересчитываем
         prev = pd.read_parquet(out).set_index("url")
+        Path("data/interim").mkdir(exist_ok=True)
+        prev.reset_index().to_parquet("data/interim/major_llm_v1.parquet", index=False)   # для сравнения «до/после»
         yes = cand[cand.url.map(prev.llm_major).fillna(False).astype(bool)]
         print("перепроверяем прошлые «Да»:", len(yes))
         prev["llm_major"] = False
