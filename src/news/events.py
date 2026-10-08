@@ -131,7 +131,7 @@ def shock_cards(cfg):
     return cards
 
 
-def write_cards_md(cards, path="reports/shock_cards.md"):
+def write_cards_md(cards, path="report/shock_cards.md"):
     lines = ["# Карточки шоков: что говорили новости", "",
              "Шоки, найденные лучшим детектором (по остаткам прогноза) в 2024 году, сдвиг ≥ 5 %, без собственной сезонности МО. "
              "Для каждого — новости значимых тем (ЧС, закрытие/открытие производств, выплаты) о МО и его регионе "

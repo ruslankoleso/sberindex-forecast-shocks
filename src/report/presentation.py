@@ -1,12 +1,12 @@
-"""Презентация в PDF: reports/presentation/presentation.pdf (слайды) и
+"""Презентация в PDF: presentation/presentation.pdf (слайды) и
 presentation_notes.pdf (слайды + текст доклада). Собирается из HTML через Chrome (headless).
 Запуск: python -m src.report.presentation
 """
 import subprocess
 from pathlib import Path
 
-OUT = Path("reports/presentation")
-FIG = Path("reports/figures").resolve()
+OUT = Path("presentation")
+FIG = Path("report/figures").resolve()
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 S = []  # (заголовок, html-содержимое, текст доклада)
@@ -211,7 +211,7 @@ slide("Новости опережают шоки: крупные события
       "любые пожары и аварии, эффекта нет — это вторая попытка, поэтому мы называем результат свидетельством, а не доказательством.")
 
 slide("Новости объясняют шоки: карточки",
-      '<p>Для каждого шока детектора автоматически подбираются новости о МО и регионе (<code>reports/shock_cards.md</code>).</p>'
+      '<p>Для каждого шока детектора автоматически подбираются новости о МО и регионе (<code>report/shock_cards.md</code>).</p>'
       + table(["Шок", "Новости"], [
           ["Чеди-Хольский р-н Тувы, +17 % с 03.2024", "06.03.2024: «В Туве ввели режим ЧС после взрыва на Шагонарской ТЭЦ»"],
           ["Орск, траты выше прогноза с 05.2024", "07.04.2024: «Сбер реструктуризирует кредиты пострадавших при прорыве дамбы в Орске»"],

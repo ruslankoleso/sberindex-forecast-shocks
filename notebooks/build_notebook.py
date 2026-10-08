@@ -89,10 +89,10 @@ tab = S.pivot(index="model", columns="h", values="MAE").loc[have].rename(index=N
 tab.columns = [f"{h} мес." for h in tab.columns]
 display(tab.style.highlight_min(axis=0, color="#d6e8fb"))
 print("* вес w подобран на тех же данных — оценка оптимистичная")""")
-code("""Image("reports/figures/01_mae_by_horizon.png")""")
+code("""Image("report/figures/01_mae_by_horizon.png")""")
 code("""r2 = S[S.model.isin(["prophet", "snaive_natg", "chronos2_ft_mix", "ens_inv_mae"])].pivot(index="model", columns="h", values="R2_yoy").rename(index=NAMES).round(2)
 r2.columns = [f"R² роста, {h} мес." for h in r2.columns]; r2""")
-code("""Image("reports/figures/02_example_forecast.png")""")
+code("""Image("report/figures/02_example_forecast.png")""")
 md("""**Какую модель выбрать.** Лучшая по точности — ансамбль; на 3–12 мес. он вровень с сезонной наивной моделью с дрейфом, которая и рекомендуется для практики (секунды расчёта, одна формула). Дообученный Chronos-2 — лучшая фундаментальная модель и «страховка» при смене режима:""")
 code("""rows = []
 for m in ["snaive_natg", "chronos2_ft_mix", "ens_inv_mae"]:
@@ -120,14 +120,14 @@ md("""## 6. Обнаружение шоков
 Шесть онлайн-детекторов (решение — только по прошлому). Разметки шоков нет, поэтому: (1) искусственные шоки в 400 реальных рядах МО при равной доле ложных тревог (10 %); (2) реальные кризисы России 2020 и 2022; (3) реальные шоки МО в 2024 году.""")
 code("""bench = pd.read_csv("data/interim/changepoint/benchmark_summary.csv", index_col=0)
 bench.sort_values("доля_найденных", ascending=False).round(3)""")
-code("""Image("reports/figures/03_detectors.png")""")
-code("""Image("reports/figures/05_national_events.png")""")
+code("""Image("report/figures/03_detectors.png")""")
+code("""Image("report/figures/05_national_events.png")""")
 code("""sh = pd.read_parquet("data/interim/changepoint/panel_shocks.parquet")
 best = sh[(sh.detector == "base_residual") & ~sh.seasonal & (sh.shift_pct.abs() >= 10)].copy()
 best["МО"] = best.mo_name.str.replace("внутригородская территория города федерального значения", "").str[:40]
 print(f"Шоков 2024 г. (лучший детектор, сдвиг ≥10 %, не сезонность): {len(best)} МО из {Y.shape[1]}")
 best.sort_values("shift_pct", key=abs, ascending=False)[["МО", "region", "shift_month", "alarm", "shift_pct"]].head(10).round(1)""")
-code("""Image("reports/figures/04_shock_examples.png")""")
+code("""Image("report/figures/04_shock_examples.png")""")
 
 md("""## 7. Новости
 **Согласование с данными СберИндекса:** время (месяц публикации, только новости до момента прогноза), место (город → МО и регион), частота (месячные доли тем). Источники: Lenta.ru, ИА REGNUM, МЧС России.""")
@@ -141,15 +141,15 @@ pd.DataFrame({"заголовок": ex, "МО": [[ref.mo_name.get(i, i) for i in
 md("""**Путь из трёх попыток:** (1) новости как признаки прогноза — эффекта нет; (2) анализ событий по широкому правилу — эффекта нет; (3) только **крупные события** (паводки, режим ЧС, эвакуации, прорывы дамб, закрытия предприятий) — после них траты затронутых МО сильнее расходятся с прогнозом, пик через 1–2 мес. Оговорка: третья попытка — уточнение после неудачи.""")
 code("""me = pd.read_pickle("data/interim/major_events.pkl")
 pd.DataFrame({k: {"событий": v["n"], "после − до": round(v["delta"], 2), "у случайных МО": round(v["null"], 2), "p": round(v["p"], 3)} for k, v in me["res"].items()}).T""")
-code("""Image("reports/figures/07_event_study.png")""")
-code("""Image("reports/figures/06_news_case_orsk.png")""")
+code("""Image("report/figures/07_event_study.png")""")
+code("""Image("report/figures/06_news_case_orsk.png")""")
 code("""ni = pd.read_pickle("data/interim/changepoint/news_informed.pkl")
 al = ni["alarms"].pivot(index="territory_id", columns="режим", values="alarm")
 print(f"Порог обычный {ni['thr']:.2f}, после новости о крупном событии в регионе — {ni['thr_low']:.2f}")
 print("Тревог всего:", al.notna().sum().to_dict())
 o = ni["events_eval"]
 o.pivot_table(index="named", columns="режим", values="найден", aggfunc="mean").rename(index={True: "МО, названные в новостях", False: "все МО региона события"}).round(3)""")
-code("""print(open("reports/shock_cards.md", encoding="utf-8").read()[:3000])""")
+code("""print(open("report/shock_cards.md", encoding="utf-8").read()[:3000])""")
 
 md("""## 8. Ключевая ставка
 Ставка одна для всех МО — проверяем её там, где она может помочь: в прогнозе роста трат страны (дрейф модели).""")

@@ -1,4 +1,4 @@
-"""Графики для отчёта и презентации → reports/figures/*.png.
+"""Графики для отчёта и презентации → report/figures/*.png.
 Запуск: python -m src.report.figures (после расчёта прогнозов, ансамбля и детекторов)."""
 from pathlib import Path
 
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-OUT = Path("reports/figures")
+OUT = Path("report/figures")
 SURFACE, INK, INK2, MUTED, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#8b8a85", "#e7e6e1"
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"   # проверенная палитра, слоты 1–4
 
