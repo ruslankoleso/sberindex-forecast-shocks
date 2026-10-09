@@ -10,13 +10,12 @@ chronos2:
   batch_size: 256
   quantiles: [0.1, 0.5, 0.9]
 timesfm:
-  # веса скачаны в models/ (через curl: загрузчик Hugging Face на этой машине зависал)
-  model_id: models/timesfm-2.5-200m-pytorch   # оригинал: google/timesfm-2.5-200m-pytorch
+  model_id: google/timesfm-2.5-200m-pytorch   # если веса лежат в models/<имя>, берутся оттуда (src/hub.py)
   max_context: 128      # наши ряды 12–72 точки; 1024 по умолчанию — лишняя работа
   max_horizon: 128
   batch_size: 32         # по умолчанию 1 ряд за раз — очень медленно; 32 рядов за раз хватает CPU с 16 ГБ памяти
 tirex:
-  model_id: models/TiRex/model.ckpt   # оригинал: NX-AI/TiRex
+  model_id: NX-AI/TiRex
   device: cpu
 chronos2_ft:                 # дообучение Chronos-2 перед каждой точкой прогноза
   mode: full
@@ -27,7 +26,7 @@ chronos2_ft:                 # дообучение Chronos-2 перед каж�
   seed: 42
   output_dir: data/interim/chronos2_ft
 timesfm_lora:                # дообучение TimesFM через LoRA (по официальному примеру дообучения TimesFM)
-  model_dir: models/timesfm-2.5-200m-transformers   # оригинал: google/timesfm-2.5-200m-transformers
+  model_dir: google/timesfm-2.5-200m-transformers
   context_len: 32            # кратно 32; ряд МО с удлинённой историей — 61–72 мес.
   horizon_len: 12
   predict_context_len: 64     # контекст при прогнозе (кратно 32)
@@ -38,3 +37,8 @@ timesfm_lora:                # дообучение TimesFM через LoRA (п�
   lora_r: 8
   lora_alpha: 16
   seed: 42
+finetuned_weights:            # веса, дообученные на одной точке прогноза, — для ноутбука
+  origin: "2023-12-01"        # обучение на 2023 годе, прогноз на весь 2024 год
+  out_dir: models/finetuned
+  archive: finetuned_2023-12.tar.gz
+  url: https://github.com/ruslankoleso/sberindex-forecast-shocks/releases/download/weights-v1/finetuned_2023-12.tar.gz

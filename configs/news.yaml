@@ -61,7 +61,7 @@ sources:
 
 # Нейросетевая разметка «крупных событий» (слабое обучение на разметке ключевыми словами)
 nlp:
-  model_dir: models/rubert-tiny2      # оригинал: cointegrated/rubert-tiny2 (эмбеддинги предложений, 29 млн параметров)
+  model_dir: cointegrated/rubert-tiny2   # эмбеддинги предложений, 29 млн параметров
   batch_size: 256
   max_length: 64
   neg_per_pos: 20                     # отрицательных примеров на один положительный
@@ -71,7 +71,7 @@ nlp:
 
 # Проверка кандидатов языковой моделью (второй этап после rubert-tiny2)
 llm:
-  model_dir: models/Qwen3-1.7B        # оригинал: Qwen/Qwen3-1.7B
+  model_dir: Qwen/Qwen3-1.7B
   candidate_p: 0.3                    # кандидаты: вероятность «крупного события» по rubert ≥ 0.3 или слово из словаря …
   require_place: true                 # … и в заголовке найдено место (МО или регион)
   batch_size: 8

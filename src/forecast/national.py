@@ -18,6 +18,7 @@ import pandas as pd
 import yaml
 
 from src.forecast.baselines import SeasonalNaive
+from src.hub import resolve
 
 
 def _load_L():
@@ -52,7 +53,7 @@ class SNaiveNationalForecast:
         if method == "chronos2":
             from chronos import BaseChronosPipeline
             cfg = yaml.safe_load(Path("configs/foundation.yaml").read_text(encoding="utf-8"))["chronos2"]
-            self.pipe = BaseChronosPipeline.from_pretrained(cfg["model_id"], device_map=cfg["device"])
+            self.pipe = BaseChronosPipeline.from_pretrained(resolve(cfg["model_id"]), device_map=cfg["device"])
 
     def predict(self, train, steps):
         t0 = train.index[-1]

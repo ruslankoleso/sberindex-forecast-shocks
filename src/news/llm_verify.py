@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+from src.hub import resolve
 
 SYSTEM = ("Ты аналитик региональной экономики России. По заголовку новости определи, сообщает ли он о КРУПНОМ событии "
           "на конкретной территории России, которое может заметно изменить траты её жителей: стихийное бедствие "
@@ -39,10 +40,10 @@ NAMES = {"Да": "крупное событие", "Нет": "другое"}
 def load_model(cfg):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    tok = AutoTokenizer.from_pretrained(cfg["model_dir"])
+    tok = AutoTokenizer.from_pretrained(resolve(cfg["model_dir"]))
     tok.padding_side = "left"
     dev = cfg["device"] if (cfg["device"] != "mps" or torch.backends.mps.is_available()) else "cpu"
-    model = AutoModelForCausalLM.from_pretrained(cfg["model_dir"], dtype=torch.float16 if dev == "mps" else torch.float32).to(dev).eval()
+    model = AutoModelForCausalLM.from_pretrained(resolve(cfg["model_dir"]), dtype=torch.float16 if dev == "mps" else torch.float32).to(dev).eval()
     ids = [tok.encode(x, add_special_tokens=False)[0] for x in LABELS]
     return tok, model, ids, dev
 

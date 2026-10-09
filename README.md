@@ -29,26 +29,41 @@
 
 ## Как запустить
 
-Нужен Python 3.14 (проверяли на macOS с Apple Silicon).
+Главный способ — ноутбук: он сам готовит данные и пересчитывает модели, ансамбль, тесты и детекторы шоков, а по ходу объясняет, что происходит. Нужен Python 3.14 (мы проверяли на macOS с Apple Silicon).
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-./run_all.sh            # данные → модели → шоки → новости → графики → ноутбук (около часа)
-./run_all.sh --heavy    # плюс дообучение нейросетей и сбор новостей (несколько часов на CPU)
+.venv/bin/jupyter lab notebooks/solution.ipynb      # затем Run All, около 20 минут
 ```
 
-Отдельные шаги и их параметры — в `run_all.sh` и `configs/*.yaml`. Тест на то, что ни одна модель не видит будущего: `.venv/bin/python -m pytest -q tests`.
+В ноутбуке не пересчитываются только самые долгие шаги. Их результаты лежат готовыми в `results/`, а пересчитать их можно так:
 
-Веса фундаментальных моделей скачиваются с Hugging Face. Если загрузка зависает (у нас такое было), их можно положить вручную в `models/` — пути указаны в `configs/foundation.yaml`.
+| Что | Команда | Время на CPU |
+|---|---|---|
+| Дообучение Chronos-2 и TimesFM на всех 12 точках прогноза | `python -m src.eval.run --models chronos2_ft_mix chronos2_ft timesfm_lora timesfm_lora_mix` | несколько часов |
+| Остальные нейросети и N-HiTS | `python -m src.eval.run --models chronos2_bc timesfm_bc timesfm_bc_mix tirex_bc tirex_bc_mix nhits autoets autotheta` | около часа |
+| Сбор новостей | `python -m src.news.collect && python -m src.news.collect_more` | несколько часов |
+| Разметка новостей (rubert-tiny2, Qwen3-1.7B) | `python -m src.news.features && python -m src.news.nlp && python -m src.news.llm_verify` | около 3 часов |
+| Крупные события и детектор с учётом новостей | `python -m src.news.events && python -m src.changepoint.news_informed` | минуты |
+
+После полного пересчёта `python -m src.prepare save` обновит `results/`.
+
+**Веса дообученных моделей.** При оценке Chronos-2 и TimesFM дообучаются заново перед каждой точкой прогноза. Мы выложили веса для одной точки — конец 2023 года, прогноз на весь 2024 год — в [релиз](https://github.com/ruslankoleso/sberindex-forecast-shocks/releases/tag/weights-v1); ноутбук скачивает их сам. Для остальных точек модели нужно дообучать: 12 копий весов заняли бы почти 3 ГБ.
+
+Базовые фундаментальные модели скачиваются с Hugging Face при первом запуске. Если загрузка зависает, их можно положить вручную в `models/<имя модели>` (например, `models/timesfm-2.5-200m-pytorch`) — код возьмёт их оттуда.
+
+Тест на то, что ни одна модель не видит будущего: `.venv/bin/python -m pytest -q tests`.
 
 ## Что где лежит
 
 ```
 presentation/   презентация и доклад
 report/         отчёт, графики, карточки шоков
-notebooks/      ноутбук с ходом работы
+notebooks/      ноутбук: запуск и ход работы
+results/        готовые результаты долгих шагов (прогнозы нейросетей, разметка новостей)
 src/
+  prepare.py    подготовка к запуску ноутбука
   data/         загрузка панели МО
   external/     справочник МО → регион (ОКТМО), ключевая ставка, календарь
   forecast/     модели прогноза: простые, Prophet, LightGBM, StatsForecast, N-HiTS, фундаментальные

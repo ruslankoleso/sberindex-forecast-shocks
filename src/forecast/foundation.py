@@ -14,6 +14,8 @@ import numpy as np
 import torch
 import yaml
 
+from src.hub import resolve
+
 
 class ChronosBolt:
     name = "chronos_bolt"
@@ -22,7 +24,7 @@ class ChronosBolt:
         cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))[key]
         from chronos import BaseChronosPipeline
         self.cfg = cfg
-        self.pipe = BaseChronosPipeline.from_pretrained(cfg["model_id"], device_map=cfg["device"],
+        self.pipe = BaseChronosPipeline.from_pretrained(resolve(cfg["model_id"]), device_map=cfg["device"],
                                                         torch_dtype=torch.float32)
         if name:
             self.name = name
@@ -123,7 +125,7 @@ class TimesFM:
     def __init__(self, backcast=False, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5):
         import timesfm
         cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["timesfm"]
-        self.model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(cfg["model_id"])
+        self.model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(resolve(cfg["model_id"]))
         self.model.compile(timesfm.ForecastConfig(
             max_context=cfg["max_context"], max_horizon=cfg["max_horizon"], normalize_inputs=True,
             per_core_batch_size=cfg["batch_size"],
@@ -150,7 +152,7 @@ class TiRex:
     def __init__(self, backcast=False, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5):
         from tirex import load_model
         cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["tirex"]
-        self.model = load_model(cfg["model_id"], device=cfg["device"])
+        self.model = load_model(resolve(cfg["model_id"]), device=cfg["device"])
         self.backcast = backcast
         self.nat = _nat_level() if backcast else None
         self.bc_mode, self.bc_w = bc_mode, bc_w
@@ -174,12 +176,14 @@ class Chronos2FineTuned(Chronos2Backcast):  # noqa: D101
     обрезанных по origin и удлинённых национальным рядом назад. Обучающие окна
     берутся только внутри этих рядов — будущее после origin модели недоступно.
     Затем дообученная модель прогнозирует продолжение тех же рядов.
+    save_dir — куда сохранить веса после дообучения (в половинной точности).
     """
     name = "chronos2_ft"
 
-    def __init__(self, **kw):
+    def __init__(self, save_dir=None, **kw):
         super().__init__(**kw)
         self.base_pipe = self.pipe
+        self.save_dir = save_dir
         self.ft = yaml.safe_load(Path("configs/foundation.yaml").read_text(encoding="utf-8"))["chronos2_ft"]
 
     def predict(self, train, steps):
@@ -191,8 +195,36 @@ class Chronos2FineTuned(Chronos2Backcast):  # noqa: D101
             batch_size=self.ft["batch_size"], learning_rate=self.ft["learning_rate"],
             finetune_mode=self.ft["mode"], output_dir=self.ft["output_dir"],
             remove_printer_callback=True, report_to=[], seed=self.ft["seed"])
+        if self.save_dir:
+            _save_half(Path(self.ft["output_dir"]) / "finetuned-ckpt", Path(self.save_dir))
         # родительский predict снова удлинит историю, поэтому передаём исходный train
         return super().predict(train, steps)
+
+
+class Chronos2Pretrained(Chronos2Backcast):
+    """Chronos-2 с готовыми весами, дообученными на одной точке прогноза (без повторного дообучения)."""
+    name = "chronos2_ft_mix"
+
+    def __init__(self, ckpt_dir, **kw):
+        cfg = yaml.safe_load(Path("configs/foundation.yaml").read_text(encoding="utf-8"))["chronos2"]
+        cfg = {**cfg, "model_id": str(ckpt_dir)}
+        from chronos import BaseChronosPipeline
+        from src.forecast.lgbm_model import load_national
+        self.cfg, self.last_quantiles = cfg, None
+        self.pipe = BaseChronosPipeline.from_pretrained(str(ckpt_dir), device_map=cfg["device"], torch_dtype=torch.float32)
+        ncfg = yaml.safe_load(Path("configs/forecast.yaml").read_text(encoding="utf-8"))
+        self.nat = np.exp(load_national(ncfg))
+        self.bc_mode, self.bc_w = kw.get("bc_mode", "mix"), kw.get("bc_w", 0.5)
+
+
+def _save_half(src, dst):
+    """Копия чекпойнта в float16: вдвое меньше места, на прогноз почти не влияет."""
+    import shutil
+    from safetensors.torch import load_file, save_file
+    dst.mkdir(parents=True, exist_ok=True)
+    w = load_file(str(src / "model.safetensors"))
+    save_file({k: (v.half() if v.is_floating_point() else v) for k, v in w.items()}, str(dst / "model.safetensors"))
+    shutil.copy(src / "config.json", dst / "config.json")
 
 
 class TimesFMXReg(TimesFM):
@@ -256,8 +288,10 @@ class TimesFMLoRA:
     """
     name = "timesfm_lora"
 
-    def __init__(self, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5):
+    def __init__(self, cfg_path="configs/foundation.yaml", bc_mode="national", bc_w=0.5, save_dir=None, adapter_dir=None):
+        """save_dir — сохранить адаптер LoRA после дообучения; adapter_dir — взять готовый адаптер и не дообучать."""
         self.cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))["timesfm_lora"]
+        self.save_dir, self.adapter_dir = save_dir, adapter_dir
         self.nat = _nat_level()
         self.bc_mode, self.bc_w = bc_mode, bc_w
         if bc_mode != "national":
@@ -272,14 +306,8 @@ class TimesFMLoRA:
             ctx.append(s[st:st + c]); tgt.append(s[st + c:st + c + h])
         return torch.tensor(np.array(ctx), dtype=torch.float32), torch.tensor(np.array(tgt), dtype=torch.float32)
 
-    def predict(self, train, steps):
+    def _finetune(self, base, series, rng):
         from peft import LoraConfig, get_peft_model
-        from transformers import TimesFm2_5ModelForPrediction
-        torch.manual_seed(self.cfg["seed"])
-        rng = np.random.default_rng(self.cfg["seed"])
-        ext = _extend(train, self.nat, self.bc_mode, self.bc_w)
-        series = [ext[c].values.astype(np.float32) for c in ext.columns]
-        base = TimesFm2_5ModelForPrediction.from_pretrained(self.cfg["model_dir"], torch_dtype=torch.float32)
         model = get_peft_model(base, LoraConfig(r=self.cfg["lora_r"], lora_alpha=self.cfg["lora_alpha"],
                                                 target_modules="all-linear", lora_dropout=0.05, bias="none"))
         X, T = self._windows(series, rng)
@@ -293,6 +321,22 @@ class TimesFMLoRA:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step(); opt.zero_grad(); sched.step()
+        return model
+
+    def predict(self, train, steps):
+        from transformers import TimesFm2_5ModelForPrediction
+        torch.manual_seed(self.cfg["seed"])
+        rng = np.random.default_rng(self.cfg["seed"])
+        ext = _extend(train, self.nat, self.bc_mode, self.bc_w)
+        series = [ext[c].values.astype(np.float32) for c in ext.columns]
+        base = TimesFm2_5ModelForPrediction.from_pretrained(resolve(self.cfg["model_dir"]), torch_dtype=torch.float32)
+        if self.adapter_dir:
+            from peft import PeftModel
+            model = PeftModel.from_pretrained(base, str(self.adapter_dir))
+        else:
+            model = self._finetune(base, series, rng)
+            if self.save_dir:
+                model.save_pretrained(str(self.save_dir))
         model.eval()
         out = []
         with torch.no_grad():

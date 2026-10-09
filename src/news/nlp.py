@@ -15,13 +15,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+from src.hub import resolve
 
 
 def embed(titles, cfg):
     import torch
     from transformers import AutoModel, AutoTokenizer
-    tok = AutoTokenizer.from_pretrained(cfg["model_dir"])
-    model = AutoModel.from_pretrained(cfg["model_dir"]).eval()
+    tok = AutoTokenizer.from_pretrained(resolve(cfg["model_dir"]))
+    model = AutoModel.from_pretrained(resolve(cfg["model_dir"])).eval()
     out = []
     with torch.no_grad():
         for i in range(0, len(titles), cfg["batch_size"]):
