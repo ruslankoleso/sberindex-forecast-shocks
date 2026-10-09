@@ -10,9 +10,7 @@ data/interim/
 models/
 data/external/news/raw/
 data/external/news/headlines*.parquet
-.claude/
 data/external/news/raw_regnum/
 data/external/news/raw_mchs/
 .dev/
-CLAUDE.md
 presentation/*.html
